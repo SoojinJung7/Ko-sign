@@ -1,0 +1,481 @@
+"use client";
+
+import { useMemo, useState } from "react";
+
+import { Alert, Button, Dialog, Textarea } from "@/components/ui";
+import { Logo } from "@/components/brand/Logo";
+import { cn } from "@/lib/ui";
+import { DocumentViewer } from "./DocumentViewer";
+import { SignaturePad } from "./SignaturePad";
+import { OtpGate } from "./OtpGate";
+import type {
+  FieldValue,
+  SignerDocInfo,
+  SignerField,
+  SignerRecipientInfo,
+} from "./types";
+
+export interface SignerAppProps {
+  token: string;
+  doc: SignerDocInfo;
+  recipient: SignerRecipientInfo;
+  role: "signer" | "viewer";
+  fields: SignerField[];
+  pdfBase64: string;
+  /** Show the OTP gate before signing. */
+  needsOtp: boolean;
+}
+
+type Phase = "otp" | "work" | "done" | "declined";
+
+function fieldHasValue(field: SignerField, value: FieldValue | undefined): boolean {
+  if (!value) return false;
+  switch (field.type) {
+    case "signature":
+    case "initials":
+      return Boolean(value.imageData || (value.value && value.value.trim()));
+    case "checkbox":
+      return (value.value ?? "").toLowerCase() === "true";
+    default:
+      return Boolean(value.value && value.value.trim());
+  }
+}
+
+export function SignerApp({
+  token,
+  doc,
+  recipient,
+  role,
+  fields,
+  pdfBase64,
+  needsOtp,
+}: SignerAppProps) {
+  const canSign = role === "signer";
+  const [phase, setPhase] = useState<Phase>(
+    canSign && needsOtp ? "otp" : "work",
+  );
+  const [values, setValues] = useState<Record<string, FieldValue>>({});
+  const [activeField, setActiveField] = useState<SignerField | null>(null);
+
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const [declineOpen, setDeclineOpen] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
+  const [declining, setDeclining] = useState(false);
+  const [declineError, setDeclineError] = useState<string | null>(null);
+
+  const requiredFields = useMemo(
+    () => fields.filter((f) => f.required),
+    [fields],
+  );
+  const completedRequired = requiredFields.filter((f) =>
+    fieldHasValue(f, values[f.id]),
+  ).length;
+  const allRequiredDone =
+    requiredFields.length === 0 || completedRequired === requiredFields.length;
+
+  function setFieldValue(fieldId: string, value: FieldValue | null) {
+    setSubmitError(null);
+    setValues((prev) => {
+      if (value === null) {
+        const next = { ...prev };
+        delete next[fieldId];
+        return next;
+      }
+      return { ...prev, [fieldId]: value };
+    });
+  }
+
+  function jumpToNext() {
+    const next = fields.find((f) => f.required && !fieldHasValue(f, values[f.id]));
+    if (!next) return;
+    const el = document.getElementById(`sign-field-${next.id}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (next.type === "signature" || next.type === "initials") {
+      setTimeout(() => setActiveField(next), 350);
+    } else {
+      (el?.querySelector("input") as HTMLElement | null)?.focus();
+    }
+  }
+
+  async function submit() {
+    if (!allRequiredDone) {
+      jumpToNext();
+      return;
+    }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const payload = fields
+        .filter((f) => fieldHasValue(f, values[f.id]))
+        .map((f) => {
+          const v = values[f.id];
+          if (f.type === "signature" || f.type === "initials") {
+            return {
+              fieldId: f.id,
+              kind: v.kind,
+              imageData: v.imageData,
+              value: v.value,
+            };
+          }
+          return { fieldId: f.id, value: v.value };
+        });
+
+      const res = await fetch(`/api/sign/${token}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fields: payload }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { ok: boolean; error?: string }
+        | null;
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error ?? "We couldn't submit your signature.");
+      }
+      setPhase("done");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+      setSubmitError(
+        e instanceof Error ? e.message : "We couldn't submit your signature.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function confirmDecline() {
+    setDeclining(true);
+    setDeclineError(null);
+    try {
+      const res = await fetch(`/api/sign/${token}/decline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: declineReason.trim() || undefined }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { ok: boolean; error?: string }
+        | null;
+      if (!res.ok || !data?.ok) {
+        throw new Error(data?.error ?? "Something went wrong.");
+      }
+      setDeclineOpen(false);
+      setPhase("declined");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) {
+      setDeclineError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setDeclining(false);
+    }
+  }
+
+  /* ---- Terminal states -------------------------------------------------- */
+  if (phase === "done") {
+    return (
+      <Outcome
+        tone="success"
+        title="You're all set"
+        icon={
+          <path d="m5 13 4 4L19 7" />
+        }
+      >
+        Thanks, {recipient.name.split(" ")[0] || recipient.name}. Your signature
+        on <strong className="font-medium text-foreground">{doc.title}</strong>{" "}
+        has been recorded. When everyone has signed, a completed copy with the
+        certificate of completion will be emailed to you.
+      </Outcome>
+    );
+  }
+
+  if (phase === "declined") {
+    return (
+      <Outcome
+        tone="danger"
+        title="You declined to sign"
+        icon={<path d="M6 6 18 18M18 6 6 18" />}
+      >
+        We&apos;ve let the sender know that you declined to sign{" "}
+        <strong className="font-medium text-foreground">{doc.title}</strong>. You
+        can close this window.
+      </Outcome>
+    );
+  }
+
+  if (phase === "otp") {
+    return (
+      <Shell title={doc.title}>
+        <div className="py-12">
+          <OtpGate token={token} onVerified={() => setPhase("work")} />
+        </div>
+      </Shell>
+    );
+  }
+
+  /* ---- Working state (view / sign) ------------------------------------- */
+  return (
+    <Shell
+      title={doc.title}
+      action={
+        canSign ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setDeclineOpen(true)}
+            className="text-tone-danger hover:bg-tone-danger-soft hover:text-tone-danger"
+          >
+            Decline
+          </Button>
+        ) : null
+      }
+    >
+      <div className="mx-auto w-full max-w-3xl px-4 pb-40 pt-6 sm:px-6">
+        {doc.message && (
+          <Alert
+            variant="info"
+            title={`Message from the sender`}
+            className="mb-6"
+          >
+            {doc.message}
+          </Alert>
+        )}
+
+        {!canSign && (
+          <Alert variant="info" className="mb-6">
+            You&apos;ve been added as a <strong>viewer</strong> on this document.
+            No signature is required — please review it below.
+          </Alert>
+        )}
+
+        {submitError && (
+          <Alert variant="error" title="Couldn't submit" className="mb-6">
+            {submitError}
+          </Alert>
+        )}
+
+        <DocumentViewer
+          pdfBase64={pdfBase64}
+          pageCount={doc.pageCount}
+          fields={fields}
+          values={values}
+          interactive={canSign}
+          onChange={setFieldValue}
+          onOpenSignature={(f) => setActiveField(f)}
+        />
+      </div>
+
+      {/* Sticky action bar (signers only) */}
+      {canSign && (
+        <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/90 backdrop-blur">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <div className="flex items-center gap-3">
+              <ProgressRing done={completedRequired} total={requiredFields.length} />
+              <div className="text-sm">
+                <p className="font-medium text-foreground">
+                  {allRequiredDone
+                    ? "All required fields complete"
+                    : `${completedRequired} of ${requiredFields.length} required fields`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {allRequiredDone
+                    ? "Review, then finish signing."
+                    : "Fill every highlighted field to continue."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {!allRequiredDone && (
+                <Button variant="secondary" onClick={jumpToNext}>
+                  Next field
+                </Button>
+              )}
+              <Button
+                size="lg"
+                loading={submitting}
+                onClick={submit}
+                disabled={!allRequiredDone && requiredFields.length > 0}
+              >
+                Finish signing
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Signature pad */}
+      {activeField && (
+        <SignaturePad
+          key={activeField.id}
+          open
+          onClose={() => setActiveField(null)}
+          label={activeField.type === "initials" ? "Initials" : "Signature"}
+          suggested={
+            activeField.type === "initials"
+              ? recipient.name
+                  .split(/\s+/)
+                  .map((p) => p[0] ?? "")
+                  .join("")
+                  .toUpperCase()
+              : recipient.name
+          }
+          onAdopt={(v) => setFieldValue(activeField.id, v)}
+        />
+      )}
+
+      {/* Decline dialog */}
+      <Dialog
+        open={declineOpen}
+        onClose={() => !declining && setDeclineOpen(false)}
+        title="Decline to sign?"
+        description="The sender will be notified and the document will be closed. This can't be undone."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => setDeclineOpen(false)}
+              disabled={declining}
+            >
+              Go back
+            </Button>
+            <Button variant="danger" onClick={confirmDecline} loading={declining}>
+              Decline
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          {declineError && <Alert variant="error">{declineError}</Alert>}
+          <Textarea
+            value={declineReason}
+            onChange={(e) => setDeclineReason(e.target.value)}
+            placeholder="Add an optional reason for the sender…"
+            rows={3}
+          />
+        </div>
+      </Dialog>
+    </Shell>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Presentational bits                                                        */
+/* -------------------------------------------------------------------------- */
+
+function Shell({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-dvh flex-col">
+      <header className="sticky top-0 z-30 border-b border-border bg-surface/90 backdrop-blur">
+        <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <Logo markOnly size={26} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {title}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Secure signing · Ko-sign
+              </p>
+            </div>
+          </div>
+          {action}
+        </div>
+      </header>
+      <main className="flex-1">{children}</main>
+    </div>
+  );
+}
+
+function ProgressRing({ done, total }: { done: number; total: number }) {
+  const pct = total === 0 ? 100 : Math.round((done / total) * 100);
+  const complete = pct >= 100;
+  return (
+    <div
+      className="relative grid size-9 shrink-0 place-items-center rounded-full"
+      style={{
+        background: `conic-gradient(${
+          complete ? "var(--t-success)" : "var(--primary)"
+        } ${pct}%, var(--border) 0)`,
+      }}
+      aria-hidden="true"
+    >
+      <span className="grid size-7 place-items-center rounded-full bg-surface text-[11px] font-semibold text-foreground">
+        {complete ? (
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="size-3.5 text-tone-success"
+          >
+            <path d="m5 13 4 4L19 7" />
+          </svg>
+        ) : (
+          `${pct}%`
+        )}
+      </span>
+    </div>
+  );
+}
+
+function Outcome({
+  tone,
+  title,
+  icon,
+  children,
+}: {
+  tone: "success" | "danger";
+  title: string;
+  icon: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-dvh flex-col">
+      <header className="border-b border-border">
+        <div className="mx-auto w-full max-w-3xl px-4 py-3 sm:px-6">
+          <Logo size={26} />
+        </div>
+      </header>
+      <main className="flex flex-1 items-center justify-center px-4 py-16">
+        <div className="w-full max-w-md text-center">
+          <span
+            className={cn(
+              "mx-auto mb-5 inline-flex size-14 items-center justify-center rounded-2xl",
+              tone === "success"
+                ? "bg-tone-success-soft text-tone-success"
+                : "bg-tone-danger-soft text-tone-danger",
+            )}
+            aria-hidden="true"
+          >
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              {icon}
+            </svg>
+          </span>
+          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            {title}
+          </h1>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            {children}
+          </p>
+        </div>
+      </main>
+    </div>
+  );
+}
