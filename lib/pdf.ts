@@ -4,6 +4,7 @@ import {
   PDFFont,
   PDFPage,
   StandardFonts,
+  degrees,
   rgb,
 } from "pdf-lib";
 
@@ -35,24 +36,85 @@ export const runtime = "nodejs";
 /* Geometry helpers (normalized top-left → pdf-lib bottom-left points)        */
 /* -------------------------------------------------------------------------- */
 
-interface Rect {
-  x: number;
-  y: number;
+interface Placement {
+  /** Field width in the displayed-upright local frame (points). */
   width: number;
+  /** Field height in the displayed-upright local frame (points). */
   height: number;
+  /** Rotation (ccw degrees) to hand pdf-lib so drawn content appears upright. */
+  rotation: number;
+  /**
+   * Map a point in the field's *displayed-upright* local frame (origin at the
+   * field's bottom-left, x → right, y → up) to pdf-lib's unrotated bottom-left
+   * user space.
+   */
+  toUser(lx: number, ly: number): { x: number; y: number };
 }
 
-/** Resolve a field's normalized rect to absolute points on a given page. */
-function toPageRect(field: Field, page: PDFPage): Rect {
-  const pw = page.getWidth();
+/**
+ * Resolve a field's normalized rect to a placement in pdf-lib user space.
+ *
+ * Field coords are normalized against the pdf.js *displayed* viewport, whose
+ * dimensions are rotation-adjusted (a /Rotate 90 page renders in landscape).
+ * pdf-lib's getWidth()/getHeight() report the un-rotated MediaBox instead, so
+ * we resolve the rect in the displayed space pdf.js exposed, translate it into
+ * pdf-lib's unrotated user space, and carry the rotation so stamped content is
+ * drawn visually upright and lands exactly where the signer placed it. On a
+ * non-rotated page (the common case) this reduces to the original mapping.
+ */
+function toPlacement(field: Field, page: PDFPage): Placement {
+  const rot = ((page.getRotation().angle % 360) + 360) % 360;
+  const pw = page.getWidth(); // raw MediaBox
   const ph = page.getHeight();
-  const width = field.width * pw;
-  const height = field.height * ph;
-  const x = field.x * pw;
-  // Field y is the distance of the field's TOP edge from the page top.
-  // Convert to pdf-lib's bottom-left origin: bottom edge = ph - top - height.
-  const y = ph - field.y * ph - height;
-  return { x, y, width, height };
+
+  // Displayed (pdf.js viewport) dimensions.
+  const VW = rot === 90 || rot === 270 ? ph : pw;
+  const VH = rot === 90 || rot === 270 ? pw : ph;
+
+  const L = field.x * VW; // left edge, displayed px (top-left origin)
+  const T = field.y * VH; // top edge
+  const RW = field.width * VW; // displayed width
+  const RH = field.height * VH; // displayed height
+
+  // User-space position of the field's displayed bottom-left corner, i.e. the
+  // inverse of the pdf.js viewport map applied to displayed point (L, T + RH).
+  let ax: number;
+  let ay: number;
+  switch (rot) {
+    case 90:
+      ax = T + RH;
+      ay = L;
+      break;
+    case 180:
+      ax = pw - L;
+      ay = T + RH;
+      break;
+    case 270:
+      ax = pw - T - RH;
+      ay = ph - L;
+      break;
+    default: // 0
+      ax = L;
+      ay = ph - T - RH;
+      break;
+  }
+
+  // Exact cos/sin for the four right angles (rounding kills 90°'s ~6e-17 error).
+  const rad = (rot * Math.PI) / 180;
+  const cos = Math.round(Math.cos(rad));
+  const sin = Math.round(Math.sin(rad));
+
+  return {
+    width: RW,
+    height: RH,
+    rotation: rot,
+    toUser(lx: number, ly: number) {
+      return {
+        x: ax + lx * cos - ly * sin,
+        y: ay + lx * sin + ly * cos,
+      };
+    },
+  };
 }
 
 /**
@@ -88,56 +150,55 @@ function decodeDataUrl(dataUrl: string): { mime: string; bytes: Uint8Array } {
 const INK = rgb(0.11, 0.12, 0.19);
 const CHECK = rgb(0.31, 0.27, 0.9);
 
-/** Draw a value centered vertically within the rect, clipped to its width. */
+/** Draw a value centered vertically within the field, clipped to its width. */
 function drawFittedText(
   page: PDFPage,
   text: string,
-  rect: Rect,
+  place: Placement,
   font: PDFFont,
 ): void {
   if (!text) return;
-  let size = Math.min(rect.height * 0.7, 16);
+  let size = Math.min(place.height * 0.7, 16);
   size = Math.max(size, 6);
   // Shrink to fit width if needed.
   let width = font.widthOfTextAtSize(text, size);
-  while (width > rect.width && size > 5) {
+  while (width > place.width && size > 5) {
     size -= 0.5;
     width = font.widthOfTextAtSize(text, size);
   }
-  const textY = rect.y + (rect.height - size) / 2 + size * 0.1;
+  // Local frame: baseline start at x=2, vertically centered.
+  const localX = 2;
+  const localY = (place.height - size) / 2 + size * 0.1;
+  const at = place.toUser(localX, localY);
   page.drawText(text, {
-    x: rect.x + 2,
-    y: textY,
+    x: at.x,
+    y: at.y,
     size,
     font,
     color: INK,
-    maxWidth: rect.width,
+    rotate: degrees(place.rotation),
+    maxWidth: place.width,
     lineHeight: size * 1.1,
   });
 }
 
-/** Draw a checkmark inside the rect. */
-function drawCheck(page: PDFPage, rect: Rect): void {
-  const pad = Math.min(rect.width, rect.height) * 0.2;
-  const x0 = rect.x + pad;
-  const x1 = rect.x + rect.width * 0.42;
-  const x2 = rect.x + rect.width - pad;
-  const yMid = rect.y + rect.height * 0.45;
-  const yBottom = rect.y + pad;
-  const yTop = rect.y + rect.height - pad;
-  const thickness = Math.max(Math.min(rect.width, rect.height) * 0.12, 1);
-  page.drawLine({
-    start: { x: x0, y: yMid },
-    end: { x: x1, y: yBottom },
-    thickness,
-    color: CHECK,
-  });
-  page.drawLine({
-    start: { x: x1, y: yBottom },
-    end: { x: x2, y: yTop },
-    thickness,
-    color: CHECK,
-  });
+/** Draw a checkmark inside the field. */
+function drawCheck(page: PDFPage, place: Placement): void {
+  const pad = Math.min(place.width, place.height) * 0.2;
+  const x0 = pad;
+  const x1 = place.width * 0.42;
+  const x2 = place.width - pad;
+  const yMid = place.height * 0.45;
+  const yBottom = pad;
+  const yTop = place.height - pad;
+  const thickness = Math.max(Math.min(place.width, place.height) * 0.12, 1);
+  // Transform both endpoints of each stroke; drawLine has no rotate option, so
+  // rotation is baked into the mapped user-space coordinates.
+  const p0 = place.toUser(x0, yMid);
+  const p1 = place.toUser(x1, yBottom);
+  const p2 = place.toUser(x2, yTop);
+  page.drawLine({ start: p0, end: p1, thickness, color: CHECK });
+  page.drawLine({ start: p1, end: p2, thickness, color: CHECK });
 }
 
 function isTruthy(value: string | null | undefined): boolean {
@@ -286,6 +347,7 @@ export async function getPdfPageCount(bytes: Uint8Array): Promise<number> {
 
 export async function finalizeDocument(
   documentId: string,
+  completedAt: Date,
 ): Promise<{ finalBytes: Uint8Array; finalHash: string }> {
   /* ---- Load everything from the DB ------------------------------------- */
   const [doc] = await db
@@ -339,7 +401,7 @@ export async function finalizeDocument(
   for (const field of docFields) {
     if (pages.length === 0) break;
     const page = pages[pageIndexFor(field, pages.length)];
-    const rect = toPageRect(field, page);
+    const place = toPlacement(field, page);
     const sig = sigByFieldId.get(field.id);
     const textValue = sig?.value ?? field.value ?? "";
 
@@ -352,36 +414,43 @@ export async function finalizeDocument(
             const image = mime.includes("jpeg") || mime.includes("jpg")
               ? await pdfDoc.embedJpg(bytes)
               : await pdfDoc.embedPng(bytes);
-            // Preserve aspect ratio within the rect.
+            // Preserve aspect ratio within the field (in displayed units).
             const scale = Math.min(
-              rect.width / image.width,
-              rect.height / image.height,
+              place.width / image.width,
+              place.height / image.height,
             );
             const drawW = image.width * scale;
             const drawH = image.height * scale;
+            // Center in the local frame, then map the image's bottom-left to
+            // user space and rotate about it so it renders visually upright.
+            const at = place.toUser(
+              (place.width - drawW) / 2,
+              (place.height - drawH) / 2,
+            );
             page.drawImage(image, {
-              x: rect.x + (rect.width - drawW) / 2,
-              y: rect.y + (rect.height - drawH) / 2,
+              x: at.x,
+              y: at.y,
               width: drawW,
               height: drawH,
+              rotate: degrees(place.rotation),
             });
           } catch {
             // Corrupt image data — fall back to any typed value.
-            drawFittedText(page, textValue, rect, helvItalic);
+            drawFittedText(page, textValue, place, helvItalic);
           }
         } else if (textValue) {
           // Typed signature: render in an italic hand-ish style.
-          drawFittedText(page, textValue, rect, helvItalic);
+          drawFittedText(page, textValue, place, helvItalic);
         }
         break;
       }
       case "date":
       case "text": {
-        drawFittedText(page, textValue, rect, helv);
+        drawFittedText(page, textValue, place, helv);
         break;
       }
       case "checkbox": {
-        if (isTruthy(textValue)) drawCheck(page, rect);
+        if (isTruthy(textValue)) drawCheck(page, place);
         break;
       }
     }
@@ -405,9 +474,12 @@ export async function finalizeDocument(
   cert.spacer(4);
   cert.keyValue("Document", doc.title);
   cert.keyValue("Document ID", doc.id);
-  cert.keyValue("Status", doc.status);
+  // finalizeDocument only ever runs at the completion moment, so the document's
+  // effective status is "completed" even though the DB row is flipped by the
+  // caller immediately after this returns.
+  cert.keyValue("Status", "completed");
   cert.keyValue("Created", fmtDate(doc.createdAt));
-  cert.keyValue("Completed", fmtDate(new Date()));
+  cert.keyValue("Completed", fmtDate(completedAt));
   cert.keyValue("Original SHA-256", originalHash);
   cert.rule();
   cert.spacer(6);

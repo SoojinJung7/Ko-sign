@@ -20,7 +20,8 @@ export const runtime = "nodejs";
  *    completion summary + SHA-256 on record.
  *  - multipart file upload — hash the uploaded bytes and search for a document
  *    whose finalized PDF hash matches. A match is `authentic`; anything else is
- *    reported as `tampered` (the bytes don't correspond to any completed record).
+ *    `unknown` (a hash-only lookup cannot tell an altered signed PDF apart from
+ *    an unrelated file, so we do not claim `tampered` here).
  *
  * The endpoint is intentionally unauthenticated: it only ever discloses the
  * document title, completion date, and signer names/emails for a document the
@@ -123,10 +124,10 @@ async function verifyByFile(bytes: Uint8Array): Promise<Response> {
   }
 
   return json({
-    status: "tampered",
+    status: "unknown",
     computedHash,
     message:
-      "This file does not match any completed document on record. It may have been modified after signing, or it was never processed here.",
+      "This file does not match any completed document on record. It may be an unrelated PDF, the original pre-signature file, or a Ko-sign document that was modified after signing.",
   });
 }
 

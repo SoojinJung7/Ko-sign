@@ -9,7 +9,6 @@ import {
   type Field,
 } from "@/db/schema";
 import { newId } from "@/lib/crypto";
-import { isSmsConfigured } from "@/lib/env";
 import { logAudit } from "@/lib/audit";
 import { notifyNextOrFinalize } from "@/lib/envelope";
 
@@ -91,13 +90,14 @@ export async function POST(
   }
 
   /* ---- Identity gate --------------------------------------------------- */
-  // If the envelope requires an identity check and we can actually deliver a
-  // code (recipient has a phone and SMS is configured), the OTP must be
-  // verified before a signature is accepted.
+  // If the envelope requires an identity check and the recipient has a phone,
+  // the OTP must be verified before a signature is accepted. This must NOT
+  // depend on whether SMS is configured: it is the only real security boundary
+  // (the client gate isn't one), and in dev the verify route's 000000 bypass
+  // still sets otpVerifiedAt so legitimate flows pass.
   if (
     document.requireIdentityCheck &&
     recipient.phone &&
-    isSmsConfigured &&
     !recipient.otpVerifiedAt
   ) {
     return jsonError("Please verify your identity before signing.", 403);

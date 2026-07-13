@@ -82,6 +82,20 @@ export async function sendEnvelope(documentId: string): Promise<void> {
     throw new Error("Cannot send an envelope with no signers");
   }
 
+  // Completeness enforcement: a draft may hold partially-filled recipients, but
+  // an envelope can never be *sent* with a missing name or an empty/invalid
+  // email. (The prepare route deliberately allows saving blanks; this is the
+  // gate that keeps them from being dispatched.)
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  for (const recipient of docRecipients) {
+    if (!recipient.name.trim()) {
+      throw new Error("Every recipient must have a name before sending.");
+    }
+    if (!recipient.email.trim() || !emailRe.test(recipient.email.trim())) {
+      throw new Error("Every recipient must have a valid email before sending.");
+    }
+  }
+
   const now = new Date();
 
   // Issue fresh tokens for every recipient and reset their status to 'pending'.
@@ -95,19 +109,10 @@ export async function sendEnvelope(documentId: string): Promise<void> {
       .where(eq(recipients.id, recipient.id));
   }
 
-  // Mark the envelope sent.
-  await db
-    .update(documents)
-    .set({ status: "sent", sentAt: now })
-    .where(eq(documents.id, documentId));
-
-  await logAudit({
-    documentId,
-    type: "sent",
-    metadata: { recipientCount: docRecipients.length, fieldCount: docFields.length },
-  });
-
-  // Email the first signer(s) in the lowest order tier.
+  // Email the first signer(s) in the lowest order tier BEFORE flipping the
+  // envelope to 'sent'. If an invite send throws, the envelope stays 'draft'
+  // and remains resendable rather than being stranded as 'sent' with an
+  // unnotified first signer.
   const firstOrder = signers[0].order;
   const firstTier = signers.filter((s) => s.order === firstOrder);
   const from = await senderName(doc.userId);
@@ -128,6 +133,18 @@ export async function sendEnvelope(documentId: string): Promise<void> {
       signUrl: recipientSignUrl(token),
     });
   }
+
+  // Mark the envelope sent only after the first-tier invites have gone out.
+  await db
+    .update(documents)
+    .set({ status: "sent", sentAt: now })
+    .where(eq(documents.id, documentId));
+
+  await logAudit({
+    documentId,
+    type: "sent",
+    metadata: { recipientCount: docRecipients.length, fieldCount: docFields.length },
+  });
 }
 
 /**
@@ -176,14 +193,15 @@ export async function notifyNextOrFinalize(documentId: string): Promise<void> {
     return;
   }
 
-  // All signers done → finalize.
-  const { finalBytes, finalHash } = await finalizeDocument(documentId);
+  // All signers done → finalize. Use a single timestamp so the certificate PDF
+  // and the DB completedAt (and thus the verify page) agree exactly.
+  const now = new Date();
+  const { finalBytes, finalHash } = await finalizeDocument(documentId, now);
   const finalFileKey = await putPdf(
     `documents/${documentId}/final.pdf`,
     Buffer.from(finalBytes),
   );
 
-  const now = new Date();
   await db
     .update(documents)
     .set({

@@ -37,7 +37,12 @@ export interface NavProps {
 
 function isActive(pathname: string, href: string): boolean {
   if (href === "/dashboard") {
-    return pathname === "/dashboard" || pathname.startsWith("/documents/");
+    return (
+      pathname === "/dashboard" ||
+      (pathname.startsWith("/documents/") &&
+        pathname !== "/documents/new" &&
+        !pathname.startsWith("/documents/new/"))
+    );
   }
   return pathname === href || pathname.startsWith(`${href}/`);
 }

@@ -17,8 +17,19 @@ export const runtime = "nodejs";
 const recipientSchema = z.object({
   // Client-generated id used to link fields; remapped to a server id on save.
   id: z.string().min(1),
-  name: z.string().trim().min(1, "Name is required").max(200),
-  email: z.string().trim().toLowerCase().email("A valid email is required").max(320),
+  // Draft-tolerant: allow blank name/email so an in-progress recipient can be
+  // saved. Completeness is enforced at send time (see sendEnvelope). Store empty
+  // strings, never null — recipients.name/email are NOT NULL columns.
+  name: z.string().trim().max(200),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(320)
+    .refine(
+      (v) => v === "" || z.string().email().safeParse(v).success,
+      "A valid email is required",
+    ),
   phone: z
     .string()
     .trim()

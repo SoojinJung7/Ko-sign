@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
 import { authTokens, users } from "@/db/schema";
@@ -32,7 +32,7 @@ export async function GET(request: Request): Promise<Response> {
   const [claimed] = await db
     .update(authTokens)
     .set({ usedAt: new Date() })
-    .where(eq(authTokens.id, row.id))
+    .where(and(eq(authTokens.id, row.id), isNull(authTokens.usedAt)))
     .returning({ id: authTokens.id });
 
   if (!claimed) {
