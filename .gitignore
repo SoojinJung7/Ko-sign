@@ -37,6 +37,9 @@ yarn-error.log*
 # local blob storage fallback (dev)
 /.blob-store
 
+# vercel integration / agent-skill artifacts
+/.agents
+
 # vercel
 .vercel
 
