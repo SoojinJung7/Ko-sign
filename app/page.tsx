@@ -13,12 +13,15 @@ import {
 } from "lucide-react";
 
 import { Logo } from "@/components/brand/Logo";
+import { getDictionary } from "@/lib/i18n/server";
 
-export const metadata = {
-  title: "Ko-sign — Sign documents with confidence",
-  description:
-    "Upload a PDF, place fields, and collect legally-sound e-signatures with SMS identity verification and a tamper-evident, SHA-256 audit trail.",
-};
+export async function generateMetadata() {
+  const t = await getDictionary();
+  return {
+    title: t.home.metaTitle,
+    description: t.home.metaDescription,
+  };
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Small building blocks                                                     */
@@ -66,7 +69,7 @@ function SecondaryCta({
 /*  Page                                                                       */
 /* -------------------------------------------------------------------------- */
 
-export default function LandingPage() {
+export default async function LandingPage() {
   return (
     <div className="flex min-h-full flex-col">
       <SiteHeader />
@@ -86,23 +89,24 @@ export default function LandingPage() {
 /*  Header                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function SiteHeader() {
+async function SiteHeader() {
+  const t = await getDictionary();
   return (
     <header className="sticky top-0 z-40 border-b border-border/70 bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link
           href="/"
           className="flex items-center rounded-lg px-1 py-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Ko-sign home"
+          aria-label={t.home.navHomeAria}
         >
           <Logo size={28} className="text-[1.15rem]" />
         </Link>
         <nav className="hidden items-center gap-7 text-sm font-medium text-muted-foreground sm:flex">
           <a href="#how-it-works" className="transition-colors hover:text-foreground">
-            How it works
+            {t.home.navHowItWorks}
           </a>
           <a href="#security" className="transition-colors hover:text-foreground">
-            Security
+            {t.home.navSecurity}
           </a>
         </nav>
         <div className="flex items-center gap-2 sm:gap-3">
@@ -110,10 +114,10 @@ function SiteHeader() {
             href="/login"
             className="hidden h-9 items-center rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"
           >
-            Sign in
+            {t.home.signIn}
           </Link>
           <PrimaryCta href="/login" className="h-9 px-4 text-sm">
-            Get started
+            {t.home.getStarted}
           </PrimaryCta>
         </div>
       </div>
@@ -125,7 +129,8 @@ function SiteHeader() {
 /*  Hero                                                                       */
 /* -------------------------------------------------------------------------- */
 
-function Hero() {
+async function Hero() {
+  const t = await getDictionary();
   return (
     <section className="relative overflow-hidden">
       {/* Ambient gradient glow */}
@@ -137,28 +142,26 @@ function Hero() {
         <div className="flex flex-col items-start">
           <span className="inline-flex items-center gap-2 rounded-full border border-tone-brand-line bg-tone-brand-soft px-3 py-1 text-xs font-medium text-tone-brand">
             <ShieldCheck size={14} aria-hidden />
-            Tamper-evident e-signatures
+            {t.home.heroBadge}
           </span>
           <h1 className="mt-5 text-4xl font-semibold leading-[1.08] tracking-tight text-foreground sm:text-5xl lg:text-[3.4rem]">
-            Sign documents with{" "}
+            {t.home.heroTitlePrefix}{" "}
             <span className="bg-gradient-to-r from-brand-500 to-brand-700 bg-clip-text text-transparent dark:from-brand-300 dark:to-brand-500">
-              confidence
+              {t.home.heroTitleHighlight}
             </span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Ko-sign is the modern way to collect legally-sound signatures. Upload
-            a PDF, place fields in seconds, and send it off — every step is
-            verified by SMS and sealed with a tamper-evident audit trail.
+            {t.home.heroSubtitle}
           </p>
           <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
             <PrimaryCta href="/login">
-              Start signing free
+              {t.home.heroPrimaryCta}
               <ArrowRight size={18} aria-hidden />
             </PrimaryCta>
-            <SecondaryCta href="#how-it-works">See how it works</SecondaryCta>
+            <SecondaryCta href="#how-it-works">{t.home.heroSecondaryCta}</SecondaryCta>
           </div>
           <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
-            {["No credit card required", "SHA-256 sealed", "Audit trail on every signature"].map(
+            {[t.home.heroCheck1, t.home.heroCheck2, t.home.heroCheck3].map(
               (item) => (
                 <li key={item} className="inline-flex items-center gap-1.5">
                   <Check size={16} className="text-tone-success" aria-hidden />
@@ -176,7 +179,8 @@ function Hero() {
 }
 
 /** Abstract product mockup: a document being signed with a live audit trail. */
-function HeroVisual() {
+async function HeroVisual() {
+  const t = await getDictionary();
   return (
     <div className="relative lg:pl-4">
       <div
@@ -190,7 +194,7 @@ function HeroVisual() {
           <span className="size-2.5 rounded-full bg-tone-warning/60" />
           <span className="size-2.5 rounded-full bg-tone-success/60" />
           <span className="ml-2 truncate text-xs text-muted-foreground">
-            Master Services Agreement.pdf
+            {t.home.visualFileName}
           </span>
         </div>
 
@@ -207,7 +211,7 @@ function HeroVisual() {
           <div className="mt-6 flex items-end justify-between gap-4">
             <div className="flex-1">
               <div className="mb-1.5 text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground">
-                Signature
+                {t.fields.signature.label}
               </div>
               <div className="flex h-14 items-center rounded-lg border-2 border-dashed border-primary/50 bg-primary/5 px-4">
                 <svg
@@ -228,7 +232,7 @@ function HeroVisual() {
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-tone-success-line bg-tone-success-soft px-2.5 py-1 text-xs font-medium text-tone-success">
               <CircleCheckBig size={13} aria-hidden />
-              Signed
+              {t.home.visualSigned}
             </span>
           </div>
         </div>
@@ -237,13 +241,13 @@ function HeroVisual() {
         <div className="mt-4 rounded-xl border border-border bg-surface-2 p-4">
           <div className="mb-3 flex items-center gap-2 text-xs font-semibold text-foreground">
             <ScrollText size={14} className="text-primary" aria-hidden />
-            Audit trail
+            {t.home.visualAuditTrail}
           </div>
           <ol className="space-y-2.5">
             {[
-              { label: "Envelope sent", meta: "10:02 · you@company.com" },
-              { label: "Identity verified via SMS", meta: "10:14 · +1 ••• ••42" },
-              { label: "Signed & SHA-256 sealed", meta: "10:15 · 3f9a…c7e1" },
+              { label: t.home.visualAudit1, meta: "10:02 · you@company.com" },
+              { label: t.home.visualAudit2, meta: "10:14 · +1 ••• ••42" },
+              { label: t.home.visualAudit3, meta: "10:15 · 3f9a…c7e1" },
             ].map((row) => (
               <li key={row.label} className="flex items-start gap-3">
                 <span
@@ -273,12 +277,13 @@ function HeroVisual() {
 /*  Trust strip                                                                */
 /* -------------------------------------------------------------------------- */
 
-function TrustStrip() {
+async function TrustStrip() {
+  const t = await getDictionary();
   const stats = [
-    { value: "SHA-256", label: "Cryptographic sealing" },
-    { value: "SMS", label: "Identity verification" },
-    { value: "100%", label: "Traceable audit trail" },
-    { value: "PDF", label: "Sign what you already have" },
+    { value: "SHA-256", label: t.home.trustSeal },
+    { value: "SMS", label: t.home.trustIdentity },
+    { value: "100%", label: t.home.trustAudit },
+    { value: "PDF", label: t.home.trustPdf },
   ];
   return (
     <section className="border-y border-border bg-surface/50">
@@ -302,22 +307,23 @@ function TrustStrip() {
 /*  How it works                                                               */
 /* -------------------------------------------------------------------------- */
 
-function HowItWorks() {
+async function HowItWorks() {
+  const t = await getDictionary();
   const steps = [
     {
       icon: Upload,
-      title: "Upload",
-      body: "Drop in any PDF. Ko-sign hashes it with SHA-256 the moment it lands, so you have a fingerprint of the original before anyone touches it.",
+      title: t.home.step1Title,
+      body: t.home.step1Body,
     },
     {
       icon: PenLine,
-      title: "Prepare",
-      body: "Place signature, date, and text fields with a click, then assign each to a recipient. Add signers, set an order, and require SMS identity checks.",
+      title: t.home.step2Title,
+      body: t.home.step2Body,
     },
     {
       icon: FileSignature,
-      title: "Sign",
-      body: "Recipients verify by SMS and sign from any device. When the last signer is done, the envelope is finalized and sealed — with a full audit trail attached.",
+      title: t.home.step3Title,
+      body: t.home.step3Body,
     },
   ];
 
@@ -326,14 +332,13 @@ function HowItWorks() {
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-2xl text-center">
           <span className="text-sm font-semibold uppercase tracking-wide text-primary">
-            How it works
+            {t.home.howEyebrow}
           </span>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            From PDF to signed in three steps
+            {t.home.howTitle}
           </h2>
           <p className="mt-4 text-lg text-muted-foreground">
-            No new file formats, no plugins, no friction. Ko-sign works with the
-            documents you already have.
+            {t.home.howSubtitle}
           </p>
         </div>
 
@@ -369,22 +374,23 @@ function HowItWorks() {
 /*  Security / trust                                                           */
 /* -------------------------------------------------------------------------- */
 
-function Security() {
+async function Security() {
+  const t = await getDictionary();
   const features = [
     {
       icon: ScrollText,
-      title: "Complete audit trail",
-      body: "Every view, verification, and signature is timestamped and recorded. Export a court-ready certificate of completion with a single click.",
+      title: t.home.feature1Title,
+      body: t.home.feature1Body,
     },
     {
       icon: Fingerprint,
-      title: "Tamper-proof SHA-256",
-      body: "Documents are hashed on upload and again when finalized. Any change to a single byte breaks the seal — so you always know the file is authentic.",
+      title: t.home.feature2Title,
+      body: t.home.feature2Body,
     },
     {
       icon: ShieldCheck,
-      title: "SMS identity verification",
-      body: "Require signers to confirm a one-time code sent to their phone before they can sign, tying each signature to a verified identity.",
+      title: t.home.feature3Title,
+      body: t.home.feature3Body,
     },
   ];
 
@@ -398,19 +404,17 @@ function Security() {
           <div className="lg:sticky lg:top-24">
             <span className="inline-flex items-center gap-2 rounded-full border border-tone-brand-line bg-tone-brand-soft px-3 py-1 text-xs font-medium text-tone-brand">
               <Lock size={14} aria-hidden />
-              Security & trust
+              {t.home.securityBadge}
             </span>
             <h2 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-              Built to hold up under scrutiny
+              {t.home.securityTitle}
             </h2>
             <p className="mt-4 text-lg text-muted-foreground">
-              Signatures are only as good as the evidence behind them. Ko-sign
-              captures that evidence at every step, so an agreement can stand on
-              its own long after it&apos;s signed.
+              {t.home.securitySubtitle}
             </p>
             <div className="mt-8">
               <PrimaryCta href="/login">
-                Create your first envelope
+                {t.home.securityCta}
                 <ArrowRight size={18} aria-hidden />
               </PrimaryCta>
             </div>
@@ -446,7 +450,8 @@ function Security() {
 /*  Final CTA                                                                  */
 /* -------------------------------------------------------------------------- */
 
-function FinalCta() {
+async function FinalCta() {
+  const t = await getDictionary();
   return (
     <section className="py-20 sm:py-28">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 lg:px-8">
@@ -457,17 +462,17 @@ function FinalCta() {
           />
           <div className="relative">
             <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-              Ready to send your first envelope?
+              {t.home.finalTitle}
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-lg text-white/85">
-              Sign in and have a document out for signature in under two minutes.
+              {t.home.finalSubtitle}
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
                 href="/login"
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-white px-6 text-[0.9375rem] font-semibold text-brand-700 shadow-sm outline-none transition-colors hover:bg-white/90 focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-brand-700"
               >
-                Get started free
+                {t.home.finalCta}
                 <ArrowRight size={18} aria-hidden />
               </Link>
             </div>
@@ -482,38 +487,38 @@ function FinalCta() {
 /*  Footer                                                                     */
 /* -------------------------------------------------------------------------- */
 
-function SiteFooter() {
+async function SiteFooter() {
+  const t = await getDictionary();
   return (
     <footer className="border-t border-border bg-surface/40">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-12 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-8">
         <div className="max-w-sm">
           <Logo size={26} className="text-[1.05rem]" />
           <p className="mt-3 text-sm text-muted-foreground">
-            The modern, secure way to collect legally-sound signatures — with a
-            tamper-evident audit trail on every document.
+            {t.home.footerTagline}
           </p>
         </div>
         <nav
-          aria-label="Footer"
+          aria-label={t.home.footerNavLabel}
           className="flex flex-wrap gap-x-8 gap-y-3 text-sm font-medium text-muted-foreground"
         >
           <a href="#how-it-works" className="transition-colors hover:text-foreground">
-            How it works
+            {t.home.navHowItWorks}
           </a>
           <a href="#security" className="transition-colors hover:text-foreground">
-            Security
+            {t.home.navSecurity}
           </a>
           <Link href="/login" className="transition-colors hover:text-foreground">
-            Sign in
+            {t.home.signIn}
           </Link>
         </nav>
       </div>
       <div className="border-t border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <p>© {new Date().getFullYear()} Ko-sign. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {t.home.footerRights}</p>
           <p className="inline-flex items-center gap-1.5">
             <ShieldCheck size={13} aria-hidden />
-            Secured with SHA-256 &amp; SMS verification
+            {t.home.footerSecured}
           </p>
         </div>
       </div>

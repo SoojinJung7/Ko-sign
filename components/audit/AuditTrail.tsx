@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 
 import { cn } from "@/lib/ui";
+import { getDictionary } from "@/lib/i18n/server";
 import {
   AUDIT_TYPE_LABEL,
   type AuditEvent,
@@ -90,15 +91,18 @@ function actorFor(
  * vertical timeline (default) or a data table, with humanized labels,
  * timestamps, the acting recipient's name, and the originating IP address.
  */
-export function AuditTrail({
+export async function AuditTrail({
   events,
   recipients = [],
   variant = "timeline",
-  title = "Audit trail",
-  emptyLabel = "No activity has been recorded yet.",
+  title,
+  emptyLabel,
   className,
   ...props
 }: AuditTrailProps) {
+  const t = await getDictionary();
+  const resolvedTitle = title ?? t.signer.auditTitle;
+  const resolvedEmptyLabel = emptyLabel ?? t.signer.auditEmpty;
   const byId = new Map(recipients.map((r) => [r.id, r]));
 
   if (events.length === 0) {
@@ -110,7 +114,7 @@ export function AuditTrail({
         )}
         {...props}
       >
-        {emptyLabel}
+        {resolvedEmptyLabel}
       </div>
     );
   }
@@ -125,20 +129,20 @@ export function AuditTrail({
         {...props}
       >
         <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
-          <caption className="sr-only">{title}</caption>
+          <caption className="sr-only">{resolvedTitle}</caption>
           <thead>
             <tr className="border-b border-border bg-surface-2/60 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <th scope="col" className="px-4 py-2.5">
-                Event
+                {t.signer.colEvent}
               </th>
               <th scope="col" className="px-4 py-2.5">
-                Who
+                {t.signer.colWho}
               </th>
               <th scope="col" className="px-4 py-2.5">
-                When
+                {t.signer.colWhen}
               </th>
               <th scope="col" className="px-4 py-2.5">
-                IP address
+                {t.signer.colIp}
               </th>
             </tr>
           </thead>
@@ -184,7 +188,7 @@ export function AuditTrail({
 
   return (
     <section
-      aria-label={title}
+      aria-label={resolvedTitle}
       className={cn("relative", className)}
       {...props}
     >
@@ -233,7 +237,7 @@ export function AuditTrail({
                 </div>
                 {event.ip && (
                   <p className="mt-0.5 font-mono text-xs text-muted-foreground">
-                    IP {event.ip}
+                    {t.signer.ipPrefix} {event.ip}
                   </p>
                 )}
               </div>

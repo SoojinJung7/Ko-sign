@@ -6,6 +6,7 @@ import { authTokens, users } from "@/db/schema";
 import { hashToken, newId, randomToken } from "@/lib/crypto";
 import { sendMagicLink } from "@/lib/email";
 import { env } from "@/lib/env";
+import { getLocale } from "@/lib/i18n/server";
 
 export const runtime = "nodejs";
 
@@ -76,7 +77,7 @@ export async function POST(request: Request): Promise<Response> {
     const url = `${env.APP_URL}/api/auth/callback?token=${encodeURIComponent(
       token,
     )}`;
-    await sendMagicLink({ to: email, url });
+    await sendMagicLink({ to: email, url, locale: await getLocale() });
   } catch (error) {
     // Log server-side, but never surface details to the caller.
     console.error("[auth/request] failed to issue magic link:", error);

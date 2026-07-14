@@ -6,8 +6,8 @@ import { and, asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, recipients } from "@/db/schema";
 import { requireUser } from "@/lib/session";
+import { getDictionary } from "@/lib/i18n/server";
 import { getAuditTrail } from "@/lib/audit";
-import { RECIPIENT_STATUS_LABEL } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, StatusBadge } from "@/components/ui";
 import { AuditTrail } from "@/components/audit/AuditTrail";
 
@@ -33,12 +33,13 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const user = await requireUser();
+  const t = await getDictionary();
   const [doc] = await db
     .select({ title: documents.title })
     .from(documents)
     .where(and(eq(documents.id, id), eq(documents.userId, user.id)))
     .limit(1);
-  return { title: doc?.title ?? "Envelope" };
+  return { title: doc?.title ?? t.sender.envelopeFallback };
 }
 
 export default async function DocumentDetailPage({
@@ -48,6 +49,7 @@ export default async function DocumentDetailPage({
 }) {
   const { id } = await params;
   const user = await requireUser();
+  const t = await getDictionary();
 
   const [doc] = await db
     .select()
@@ -87,7 +89,7 @@ export default async function DocumentDetailPage({
         >
           <path d="m15 18-6-6 6-6" />
         </svg>
-        All envelopes
+        {t.sender.allEnvelopes}
       </Link>
 
       {/* Header */}
@@ -97,13 +99,20 @@ export default async function DocumentDetailPage({
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {doc.title}
             </h1>
-            <StatusBadge kind="document" status={doc.status} />
+            <StatusBadge
+              kind="document"
+              status={doc.status}
+              label={t.status.doc[doc.status]}
+            />
           </div>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            {doc.originalFileName} · Created {dateTimeFmt.format(doc.createdAt)}
-            {doc.sentAt ? ` · Sent ${dateTimeFmt.format(doc.sentAt)}` : ""}
+            {doc.originalFileName} · {t.sender.createdLabel}{" "}
+            {dateTimeFmt.format(doc.createdAt)}
+            {doc.sentAt
+              ? ` · ${t.sender.sentAtLabel} ${dateTimeFmt.format(doc.sentAt)}`
+              : ""}
             {doc.completedAt
-              ? ` · Completed ${dateTimeFmt.format(doc.completedAt)}`
+              ? ` · ${t.sender.completedAtLabel} ${dateTimeFmt.format(doc.completedAt)}`
               : ""}
           </p>
         </div>
@@ -112,7 +121,7 @@ export default async function DocumentDetailPage({
         <div className="flex shrink-0 flex-wrap items-center gap-3">
           {doc.status === "draft" && (
             <Link href={`/documents/${doc.id}/prepare`} className={linkPrimary}>
-              Continue preparing
+              {t.sender.continuePreparing}
             </Link>
           )}
           {doc.status === "completed" && (
@@ -134,7 +143,7 @@ export default async function DocumentDetailPage({
                 <path d="M12 3v12m0 0 4-4m-4 4-4-4" />
                 <path d="M5 21h14" />
               </svg>
-              Download signed PDF
+              {t.sender.downloadSignedPdf}
             </a>
           )}
           {doc.status === "sent" && <VoidEnvelopeButton documentId={doc.id} />}
@@ -145,7 +154,7 @@ export default async function DocumentDetailPage({
       {doc.message && (
         <Card className="mt-6">
           <CardHeader>
-            <CardTitle>Message to recipients</CardTitle>
+            <CardTitle>{t.sender.messageToRecipients}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="whitespace-pre-wrap text-sm text-muted-foreground">
@@ -159,13 +168,13 @@ export default async function DocumentDetailPage({
       <Card className="mt-6">
         <CardHeader>
           <CardTitle>
-            Recipients ({docRecipients.length})
+            {t.sender.recipients} ({docRecipients.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
           {docRecipients.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No recipients have been added yet.
+              {t.sender.noRecipientsYet}
             </p>
           ) : (
             <ul className="flex flex-col divide-y divide-border">
@@ -182,8 +191,8 @@ export default async function DocumentDetailPage({
                   >
                     <span
                       className="inline-flex size-8 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2 text-xs font-semibold tabular-nums text-muted-foreground"
-                      title={`Signing order ${r.order}`}
-                      aria-label={`Signing order ${r.order}`}
+                      title={`${t.sender.signingOrder} ${r.order}`}
+                      aria-label={`${t.sender.signingOrder} ${r.order}`}
                     >
                       {r.order}
                     </span>
@@ -192,7 +201,7 @@ export default async function DocumentDetailPage({
                         {r.name}
                         {r.role === "viewer" && (
                           <span className="ml-2 text-xs font-normal text-muted-foreground">
-                            (viewer)
+                            {t.sender.viewer}
                           </span>
                         )}
                       </p>
@@ -205,7 +214,8 @@ export default async function DocumentDetailPage({
                       <StatusBadge
                         kind="recipient"
                         status={r.status}
-                        aria-label={`Status: ${RECIPIENT_STATUS_LABEL[r.status]}`}
+                        label={t.status.recipient[r.status]}
+                        aria-label={`${t.sender.statusLabel}: ${t.status.recipient[r.status]}`}
                       />
                       {eligibleToResend && <ResendButton recipientId={r.id} />}
                     </div>
@@ -220,7 +230,7 @@ export default async function DocumentDetailPage({
       {/* Audit trail */}
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Audit trail</CardTitle>
+          <CardTitle>{t.sender.auditTrail}</CardTitle>
         </CardHeader>
         <CardContent>
           <AuditTrail events={auditTrail} recipients={docRecipients} />

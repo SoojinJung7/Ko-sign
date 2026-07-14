@@ -1,16 +1,19 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { getDictionary } from "@/lib/i18n/server";
 import { getCurrentUser } from "@/lib/session";
 import { LoginForm } from "./LoginForm";
 
 export const runtime = "nodejs";
 
-export const metadata: Metadata = {
-  title: "Sign in",
-  description:
-    "Sign in to Ko-sign with a secure magic link — no password required.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return {
+    title: t.auth.metaTitle,
+    description: t.auth.metaDescription,
+  };
+}
 
 export default async function LoginPage({
   searchParams,
@@ -23,6 +26,7 @@ export default async function LoginPage({
 
   const { error } = await searchParams;
   const hasError = error === "invalid";
+  const t = await getDictionary();
 
   return (
     <main className="flex min-h-full flex-1 items-center justify-center bg-background px-4 py-16">
@@ -32,17 +36,17 @@ export default async function LoginPage({
             Ko-sign
           </span>
           <h1 className="mt-4 text-xl font-semibold tracking-tight text-foreground">
-            Sign in to your account
+            {t.auth.heading}
           </h1>
           <p className="mt-1.5 text-sm text-muted-foreground">
-            We&apos;ll email you a secure link to sign in. No password needed.
+            {t.auth.subheading}
           </p>
         </div>
 
         <LoginForm initialError={hasError} />
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          By continuing you agree to Ko-sign&apos;s terms and privacy policy.
+          {t.auth.terms}
         </p>
       </div>
     </main>

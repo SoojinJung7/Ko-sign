@@ -11,6 +11,7 @@ import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 import { Alert, Spinner } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/ui";
 import type { FieldValue, SignerField } from "./types";
 
@@ -48,6 +49,7 @@ export function DocumentViewer({
   onChange,
   onOpenSignature,
 }: DocumentViewerProps) {
+  const { t } = useI18n();
   const bytes = useMemo(() => base64ToBytes(pdfBase64), [pdfBase64]);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +64,7 @@ export function DocumentViewer({
         if (!cancelled) setPdf(loaded);
       })
       .catch(() => {
-        if (!cancelled) setError("We couldn't display this document.");
+        if (!cancelled) setError(t.signer.viewerError);
       });
     // Destroying the loading task tears down the document proxy + worker link.
     return () => {
@@ -83,7 +85,7 @@ export function DocumentViewer({
 
   if (error) {
     return (
-      <Alert variant="error" title="Preview unavailable">
+      <Alert variant="error" title={t.signer.previewUnavailable}>
         {error}
       </Alert>
     );
@@ -92,7 +94,7 @@ export function DocumentViewer({
   if (!pdf) {
     return (
       <div className="flex items-center justify-center gap-3 rounded-2xl border border-border bg-surface py-24 text-sm text-muted-foreground">
-        <Spinner size={18} /> Loading document…
+        <Spinner size={18} /> {t.signer.loadingDocument}
       </div>
     );
   }
@@ -130,6 +132,7 @@ function PdfPage({
   pageNumber: number;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [renderWidth, setRenderWidth] = useState(0);
@@ -187,7 +190,7 @@ function PdfPage({
   return (
     <div className="w-full max-w-3xl">
       <div className="mb-1.5 text-center text-xs font-medium text-muted-foreground">
-        Page {pageNumber}
+        {t.signer.pageLabel} {pageNumber}
       </div>
       <div
         ref={wrapRef}
@@ -197,7 +200,7 @@ function PdfPage({
         <canvas
           ref={canvasRef}
           className="block h-auto w-full"
-          aria-label={`Document page ${pageNumber}`}
+          aria-label={`${t.signer.documentPageLabel} ${pageNumber}`}
         />
         {children}
       </div>
@@ -239,7 +242,9 @@ function FieldOverlay({
   onChange: (value: FieldValue | null) => void;
   onOpenSignature: () => void;
 }) {
+  const { t } = useI18n();
   const filled = hasValue(field, value);
+  const requiredSuffix = field.required ? t.signer.requiredSuffix : "";
 
   const style: React.CSSProperties = {
     position: "absolute",
@@ -270,7 +275,7 @@ function FieldOverlay({
         style={style}
         onClick={onOpenSignature}
         disabled={!interactive}
-        aria-label={`${field.type === "initials" ? "Initials" : "Signature"} field${field.required ? ", required" : ""}`}
+        aria-label={`${field.type === "initials" ? t.fields.initials.label : t.fields.signature.label} ${t.signer.fieldWord}${requiredSuffix}`}
         className={cn(commonWrap, interactive && "cursor-pointer transition-colors")}
       >
         {value?.imageData ? (
@@ -307,7 +312,7 @@ function FieldOverlay({
               <path d="M3 17c3-1 4-9 6-9s2 6 4 6 2-4 4-4" />
               <path d="M3 20h18" />
             </svg>
-            {field.type === "initials" ? "Initials" : "Sign"}
+            {field.type === "initials" ? t.fields.initials.label : t.signer.signCta}
           </span>
         )}
       </button>
@@ -323,7 +328,7 @@ function FieldOverlay({
         id={`sign-field-${field.id}`}
         role="checkbox"
         aria-checked={checked}
-        aria-label={`Checkbox${field.required ? ", required" : ""}`}
+        aria-label={`${t.fields.checkbox.label}${requiredSuffix}`}
         style={style}
         disabled={!interactive}
         onClick={() => onChange(checked ? null : { value: "true" })}
@@ -358,7 +363,7 @@ function FieldOverlay({
           onChange={(e) =>
             onChange(e.target.value ? { value: e.target.value } : null)
           }
-          aria-label={`Date field${field.required ? ", required" : ""}`}
+          aria-label={`${t.fields.date.label} ${t.signer.fieldWord}${requiredSuffix}`}
           className="h-full w-full bg-transparent px-1 text-center text-[inherit] text-slate-900 outline-none dark:text-slate-900"
         />
       </div>
@@ -375,8 +380,8 @@ function FieldOverlay({
         onChange={(e) =>
           onChange(e.target.value ? { value: e.target.value } : null)
         }
-        placeholder={field.required ? "Required" : ""}
-        aria-label={`Text field${field.required ? ", required" : ""}`}
+        placeholder={field.required ? t.signer.requiredPlaceholder : ""}
+        aria-label={`${t.fields.text.label} ${t.signer.fieldWord}${requiredSuffix}`}
         className="h-full w-full bg-transparent px-1 text-[inherit] text-slate-900 outline-none placeholder:text-brand-700/50 dark:text-slate-900"
       />
     </div>

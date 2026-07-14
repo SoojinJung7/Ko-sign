@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { Alert, Button, Dialog, Textarea } from "@/components/ui";
 import { Logo } from "@/components/brand/Logo";
+import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/ui";
 import { DocumentViewer } from "./DocumentViewer";
 import { SignaturePad } from "./SignaturePad";
@@ -50,6 +51,7 @@ export function SignerApp({
   pdfBase64,
   needsOtp,
 }: SignerAppProps) {
+  const { t } = useI18n();
   const canSign = role === "signer";
   const [phase, setPhase] = useState<Phase>(
     canSign && needsOtp ? "otp" : "work",
@@ -131,13 +133,13 @@ export function SignerApp({
         | { ok: boolean; error?: string }
         | null;
       if (!res.ok || !data?.ok) {
-        throw new Error(data?.error ?? "We couldn't submit your signature.");
+        throw new Error(data?.error ?? t.signer.submitErrorFallback);
       }
       setPhase("done");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
       setSubmitError(
-        e instanceof Error ? e.message : "We couldn't submit your signature.",
+        e instanceof Error ? e.message : t.signer.submitErrorFallback,
       );
     } finally {
       setSubmitting(false);
@@ -157,13 +159,13 @@ export function SignerApp({
         | { ok: boolean; error?: string }
         | null;
       if (!res.ok || !data?.ok) {
-        throw new Error(data?.error ?? "Something went wrong.");
+        throw new Error(data?.error ?? t.signer.genericError);
       }
       setDeclineOpen(false);
       setPhase("declined");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (e) {
-      setDeclineError(e instanceof Error ? e.message : "Something went wrong.");
+      setDeclineError(e instanceof Error ? e.message : t.signer.genericError);
     } finally {
       setDeclining(false);
     }
@@ -174,15 +176,16 @@ export function SignerApp({
     return (
       <Outcome
         tone="success"
-        title="You're all set"
+        title={t.signer.doneTitle}
         icon={
           <path d="m5 13 4 4L19 7" />
         }
       >
-        Thanks, {recipient.name.split(" ")[0] || recipient.name}. Your signature
-        on <strong className="font-medium text-foreground">{doc.title}</strong>{" "}
-        has been recorded. When everyone has signed, a completed copy with the
-        certificate of completion will be emailed to you.
+        {t.signer.donePrefix}
+        {recipient.name.split(" ")[0] || recipient.name}
+        {t.signer.doneMid}
+        <strong className="font-medium text-foreground">{doc.title}</strong>
+        {t.signer.doneSuffix}
       </Outcome>
     );
   }
@@ -191,19 +194,19 @@ export function SignerApp({
     return (
       <Outcome
         tone="danger"
-        title="You declined to sign"
+        title={t.signer.declinedTitle}
         icon={<path d="M6 6 18 18M18 6 6 18" />}
       >
-        We&apos;ve let the sender know that you declined to sign{" "}
-        <strong className="font-medium text-foreground">{doc.title}</strong>. You
-        can close this window.
+        {t.signer.declinedPrefix}
+        <strong className="font-medium text-foreground">{doc.title}</strong>
+        {t.signer.declinedSuffix}
       </Outcome>
     );
   }
 
   if (phase === "otp") {
     return (
-      <Shell title={doc.title}>
+      <Shell title={doc.title} subtitle={t.signer.secureSigning}>
         <div className="py-12">
           <OtpGate token={token} onVerified={() => setPhase("work")} />
         </div>
@@ -215,6 +218,7 @@ export function SignerApp({
   return (
     <Shell
       title={doc.title}
+      subtitle={t.signer.secureSigning}
       action={
         canSign ? (
           <Button
@@ -223,7 +227,7 @@ export function SignerApp({
             onClick={() => setDeclineOpen(true)}
             className="text-tone-danger hover:bg-tone-danger-soft hover:text-tone-danger"
           >
-            Decline
+            {t.signer.declineCta}
           </Button>
         ) : null
       }
@@ -232,7 +236,7 @@ export function SignerApp({
         {doc.message && (
           <Alert
             variant="info"
-            title={`Message from the sender`}
+            title={t.signer.messageFromSender}
             className="mb-6"
           >
             {doc.message}
@@ -241,13 +245,14 @@ export function SignerApp({
 
         {!canSign && (
           <Alert variant="info" className="mb-6">
-            You&apos;ve been added as a <strong>viewer</strong> on this document.
-            No signature is required — please review it below.
+            {t.signer.viewerNoticePrefix}
+            <strong>{t.signer.viewerBadge}</strong>
+            {t.signer.viewerNoticeSuffix}
           </Alert>
         )}
 
         {submitError && (
-          <Alert variant="error" title="Couldn't submit" className="mb-6">
+          <Alert variant="error" title={t.signer.submitErrorTitle} className="mb-6">
             {submitError}
           </Alert>
         )}
@@ -272,20 +277,20 @@ export function SignerApp({
               <div className="text-sm">
                 <p className="font-medium text-foreground">
                   {allRequiredDone
-                    ? "All required fields complete"
-                    : `${completedRequired} of ${requiredFields.length} required fields`}
+                    ? t.signer.requiredAllComplete
+                    : `${t.signer.requiredProgressPrefix}${completedRequired}${t.signer.requiredProgressMid}${requiredFields.length}${t.signer.requiredProgressSuffix}`}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {allRequiredDone
-                    ? "Review, then finish signing."
-                    : "Fill every highlighted field to continue."}
+                    ? t.signer.reviewThenFinish
+                    : t.signer.fillHighlighted}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {!allRequiredDone && (
                 <Button variant="secondary" onClick={jumpToNext}>
-                  Next field
+                  {t.signer.nextField}
                 </Button>
               )}
               <Button
@@ -294,7 +299,7 @@ export function SignerApp({
                 onClick={submit}
                 disabled={!allRequiredDone && requiredFields.length > 0}
               >
-                Finish signing
+                {t.signer.finishSigning}
               </Button>
             </div>
           </div>
@@ -307,7 +312,11 @@ export function SignerApp({
           key={activeField.id}
           open
           onClose={() => setActiveField(null)}
-          label={activeField.type === "initials" ? "Initials" : "Signature"}
+          label={
+            activeField.type === "initials"
+              ? t.fields.initials.label
+              : t.fields.signature.label
+          }
           suggested={
             activeField.type === "initials"
               ? recipient.name
@@ -325,8 +334,8 @@ export function SignerApp({
       <Dialog
         open={declineOpen}
         onClose={() => !declining && setDeclineOpen(false)}
-        title="Decline to sign?"
-        description="The sender will be notified and the document will be closed. This can't be undone."
+        title={t.signer.declineDialogTitle}
+        description={t.signer.declineDialogDesc}
         footer={
           <>
             <Button
@@ -334,10 +343,10 @@ export function SignerApp({
               onClick={() => setDeclineOpen(false)}
               disabled={declining}
             >
-              Go back
+              {t.signer.goBack}
             </Button>
             <Button variant="danger" onClick={confirmDecline} loading={declining}>
-              Decline
+              {t.signer.declineCta}
             </Button>
           </>
         }
@@ -347,7 +356,7 @@ export function SignerApp({
           <Textarea
             value={declineReason}
             onChange={(e) => setDeclineReason(e.target.value)}
-            placeholder="Add an optional reason for the sender…"
+            placeholder={t.signer.declineReasonPlaceholder}
             rows={3}
           />
         </div>
@@ -362,10 +371,12 @@ export function SignerApp({
 
 function Shell({
   title,
+  subtitle,
   action,
   children,
 }: {
   title: string;
+  subtitle: string;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
@@ -380,7 +391,7 @@ function Shell({
                 {title}
               </p>
               <p className="text-xs text-muted-foreground">
-                Secure signing · Ko-sign
+                {subtitle} · Ko-sign
               </p>
             </div>
           </div>

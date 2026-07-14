@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/ui";
+import { useI18n } from "@/lib/i18n/provider";
 
 export interface DialogProps {
   open: boolean;
@@ -48,6 +49,7 @@ export function Dialog({
   hideCloseButton = false,
   className,
 }: DialogProps) {
+  const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
   const headingId = useId();
@@ -166,7 +168,7 @@ export function Dialog({
               <button
                 type="button"
                 onClick={onClose}
-                aria-label="Close dialog"
+                aria-label={t.chrome.closeDialog}
                 className="-mr-1.5 -mt-1 inline-flex size-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <svg

@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { Button, Dialog } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/ui";
 import type { FieldValue } from "./types";
 
@@ -40,6 +41,7 @@ export function SignaturePad({
   suggested = "",
   onAdopt,
 }: SignaturePadProps) {
+  const { t } = useI18n();
   // The parent remounts this component per field (via `key`), so plain initial
   // state is a clean slate every time the pad opens.
   const [mode, setMode] = useState<Mode>("draw");
@@ -138,15 +140,15 @@ export function SignaturePad({
       open={open}
       onClose={onClose}
       size="lg"
-      title={`Add your ${label.toLowerCase()}`}
-      description="Draw it, or type your name and we'll style it for you."
+      title={`${t.signer.padTitlePrefix}${label.toLowerCase()}${t.signer.padTitleSuffix}`}
+      description={t.signer.padDescription}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t.common.cancel}
           </Button>
           <Button onClick={adopt} disabled={!canAdopt}>
-            Adopt &amp; place
+            {t.signer.adoptPlace}
           </Button>
         </>
       }
@@ -156,12 +158,12 @@ export function SignaturePad({
         <div
           className="inline-flex rounded-xl border border-border bg-surface-2/60 p-1"
           role="tablist"
-          aria-label="Signature input method"
+          aria-label={t.signer.inputMethodLabel}
         >
           {(
             [
-              ["draw", "Draw"],
-              ["type", "Type"],
+              ["draw", t.signer.tabDraw],
+              ["type", t.signer.tabType],
             ] as const
           ).map(([value, text]) => {
             const active = mode === value;
@@ -209,13 +211,13 @@ export function SignaturePad({
                   className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-slate-400"
                   aria-hidden="true"
                 >
-                  Sign here
+                  {t.signer.signHere}
                 </span>
               )}
             </div>
             <div className="flex justify-end">
               <Button variant="ghost" size="sm" onClick={clear} disabled={!hasDrawing}>
-                Clear
+                {t.signer.clear}
               </Button>
             </div>
           </div>
@@ -225,7 +227,7 @@ export function SignaturePad({
               autoFocus
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
-              placeholder="Type your full name"
+              placeholder={t.signer.typeFullName}
               className="h-11 w-full rounded-lg border border-input-border bg-input px-3 text-sm text-foreground shadow-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35"
             />
             <div className="flex min-h-24 items-center justify-center rounded-xl border border-border-strong bg-white px-4">
@@ -238,15 +240,16 @@ export function SignaturePad({
                   lineHeight: 1.1,
                 }}
               >
-                {typed.trim() || "Your name"}
+                {typed.trim() || t.signer.yourNamePreview}
               </span>
             </div>
           </div>
         )}
 
         <p className="text-xs text-muted-foreground">
-          By adopting this {label.toLowerCase()}, you agree it is the electronic
-          representation of your signature for all purposes on this document.
+          {t.signer.consentPrefix}
+          {label.toLowerCase()}
+          {t.signer.consentSuffix}
         </p>
       </div>
     </Dialog>

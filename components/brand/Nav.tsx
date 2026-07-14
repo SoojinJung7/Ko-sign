@@ -13,17 +13,18 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { Logo } from "./Logo";
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: "dashboard" | "newEnvelope";
   icon: LucideIcon;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/documents/new", label: "New envelope", icon: FilePlus },
+  { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
+  { href: "/documents/new", labelKey: "newEnvelope", icon: FilePlus },
 ];
 
 export interface NavUser {
@@ -54,6 +55,7 @@ function isActive(pathname: string, href: string): boolean {
  * top bar + slide-in drawer.
  */
 export function Nav({ user }: NavProps) {
+  const { t } = useI18n();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -80,8 +82,8 @@ export function Nav({ user }: NavProps) {
   }
 
   const links = (
-    <nav aria-label="Primary" className="flex flex-col gap-1">
-      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+    <nav aria-label={t.chrome.primaryNavLabel} className="flex flex-col gap-1">
+      {NAV_ITEMS.map(({ href, labelKey, icon: Icon }) => {
         const active = isActive(pathname, href);
         return (
           <Link
@@ -107,7 +109,7 @@ export function Nav({ user }: NavProps) {
               )}
               aria-hidden
             />
-            {label}
+            {t.chrome[labelKey]}
           </Link>
         );
       })}
@@ -139,7 +141,7 @@ export function Nav({ user }: NavProps) {
         className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
       >
         <LogOut size={18} strokeWidth={2} className="shrink-0" aria-hidden />
-        {loggingOut ? "Signing out…" : "Log out"}
+        {loggingOut ? t.chrome.signingOut : t.chrome.logOut}
       </button>
     </div>
   );
@@ -169,7 +171,7 @@ export function Nav({ user }: NavProps) {
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
-          aria-label="Open navigation menu"
+          aria-label={t.chrome.openNav}
           aria-expanded={mobileOpen}
           className="grid size-9 place-items-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
         >
@@ -182,7 +184,7 @@ export function Nav({ user }: NavProps) {
         <div className="fixed inset-0 z-40 lg:hidden">
           <button
             type="button"
-            aria-label="Close navigation menu"
+            aria-label={t.chrome.closeNav}
             onClick={() => setMobileOpen(false)}
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
           />
@@ -192,7 +194,7 @@ export function Nav({ user }: NavProps) {
               <button
                 type="button"
                 onClick={() => setMobileOpen(false)}
-                aria-label="Close navigation menu"
+                aria-label={t.chrome.closeNav}
                 className="grid size-9 place-items-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-surface-2 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X size={20} aria-hidden />

@@ -1,6 +1,7 @@
 import { format } from "date-fns";
 
 import { cn } from "@/lib/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { Badge } from "@/components/ui";
 import type { BadgeTone } from "@/lib/types";
 import type { VerifyResponse, VerifyStatus } from "./types";
@@ -10,7 +11,6 @@ import type { VerifyResponse, VerifyStatus } from "./types";
 /* -------------------------------------------------------------------------- */
 
 interface StatusStyle {
-  label: string;
   tone: BadgeTone;
   /** Trust-badge gradient / ring surface classes. */
   badge: string;
@@ -59,20 +59,17 @@ const shieldQuestion = (
 
 const STATUS_STYLES: Record<VerifyStatus, StatusStyle> = {
   authentic: {
-    label: "Authentic",
     tone: "success",
     badge:
       "bg-tone-success-soft text-tone-success ring-tone-success-line",
     icon: shieldCheck,
   },
   tampered: {
-    label: "Tampered",
     tone: "danger",
     badge: "bg-tone-danger-soft text-tone-danger ring-tone-danger-line",
     icon: shieldAlert,
   },
   unknown: {
-    label: "Not found",
     tone: "warning",
     badge:
       "bg-tone-warning-soft text-tone-warning ring-tone-warning-line",
@@ -108,7 +105,9 @@ function Row({
 }
 
 export function VerifyResult({ result }: { result: VerifyResponse }) {
+  const { t } = useI18n();
   const style = STATUS_STYLES[result.status];
+  const label = t.verify.status[result.status];
   const summary = result.summary;
   const completedAt = summary ? formatDate(summary.completedAt) : null;
   const matchedHash = summary?.finalHash || result.computedHash || null;
@@ -133,14 +132,14 @@ export function VerifyResult({ result }: { result: VerifyResponse }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-semibold tracking-tight text-foreground">
-              {style.label}
+              {label}
             </h2>
             <Badge tone={style.tone} size="sm">
               {result.status === "authentic"
-                ? "Verified"
+                ? t.verify.badge.verified
                 : result.status === "tampered"
-                  ? "No match"
-                  : "Unverified"}
+                  ? t.verify.badge.noMatch
+                  : t.verify.badge.unverified}
             </Badge>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -153,20 +152,20 @@ export function VerifyResult({ result }: { result: VerifyResponse }) {
       {(summary || matchedHash) && (
         <dl className="p-5 sm:p-6">
           {summary && (
-            <Row label="Document">
+            <Row label={t.verify.rowDocument}>
               <span className="font-medium">{summary.title}</span>
             </Row>
           )}
           {summary && (
-            <Row label="Document ID">
+            <Row label={t.verify.documentId}>
               <span className="break-all font-mono text-xs text-muted-foreground">
                 {summary.documentId}
               </span>
             </Row>
           )}
-          {completedAt && <Row label="Completed">{completedAt}</Row>}
+          {completedAt && <Row label={t.verify.rowCompleted}>{completedAt}</Row>}
           {summary && summary.signers.length > 0 && (
-            <Row label="Signers">
+            <Row label={t.verify.rowSigners}>
               <ul className="space-y-1.5">
                 {summary.signers.map((s, i) => {
                   const signedAt = formatDate(s.signedAt);
@@ -178,7 +177,7 @@ export function VerifyResult({ result }: { result: VerifyResponse }) {
                       </span>
                       {signedAt && (
                         <span className="block text-xs text-muted-foreground">
-                          Signed {signedAt}
+                          {t.verify.signedPrefix} {signedAt}
                         </span>
                       )}
                     </li>
@@ -191,8 +190,8 @@ export function VerifyResult({ result }: { result: VerifyResponse }) {
             <Row
               label={
                 result.status === "authentic" && result.computedHash
-                  ? "Matched SHA-256"
-                  : "SHA-256"
+                  ? t.verify.rowMatchedHash
+                  : t.verify.rowHash
               }
             >
               <code className="block break-all rounded-md bg-surface-2 px-2.5 py-2 font-mono text-xs text-foreground">
@@ -200,8 +199,7 @@ export function VerifyResult({ result }: { result: VerifyResponse }) {
               </code>
               {result.status === "tampered" && result.computedHash && (
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  This is the fingerprint of the file you uploaded. It does not
-                  match any completed document.
+                  {t.verify.tamperedHashNote}
                 </p>
               )}
             </Row>

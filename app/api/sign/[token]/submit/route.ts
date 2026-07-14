@@ -11,6 +11,7 @@ import {
 import { newId } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
 import { notifyNextOrFinalize } from "@/lib/envelope";
+import { getLocale } from "@/lib/i18n/server";
 
 import {
   hasEarlierPendingSigner,
@@ -191,7 +192,7 @@ export async function POST(
   });
 
   // Advance the envelope: email the next signer, or finalize + notify all.
-  await notifyNextOrFinalize(document.id);
+  await notifyNextOrFinalize(document.id, await getLocale());
 
   return jsonOk();
 }

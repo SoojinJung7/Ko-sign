@@ -1,6 +1,8 @@
 import { Resend } from "resend";
 
 import { env, isEmailConfigured } from "@/lib/env";
+import { dictionaries } from "@/lib/i18n/dictionaries";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 
 /**
  * Transactional email via Resend, with a dev fallback that logs the subject and
@@ -21,6 +23,7 @@ interface ButtonEmailOptions {
   ctaUrl: string;
   outro?: string;
   footnote?: string;
+  locale: Locale;
 }
 
 function escapeHtml(value: string): string {
@@ -32,9 +35,10 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function shell(bodyInner: string): string {
+function shell(bodyInner: string, locale: Locale): string {
+  const t = dictionaries[locale].emails;
   return `<!doctype html>
-<html lang="en">
+<html lang="${locale}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -56,7 +60,7 @@ function shell(bodyInner: string): string {
             </tr>
           </table>
           <p style="max-width:520px;color:#8a8aa0;font-size:12px;line-height:1.6;margin:20px auto 0;padding:0 16px;">
-            ${BRAND} is a secure e-signature service. If you weren't expecting this email you can safely ignore it.
+            ${BRAND}${t.footerNoteSuffix}
           </p>
         </td>
       </tr>
@@ -66,6 +70,7 @@ function shell(bodyInner: string): string {
 }
 
 function buttonEmail(opts: ButtonEmailOptions): string {
+  const t = dictionaries[opts.locale].emails;
   return shell(`
     <h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;font-weight:700;color:#1f2130;">${opts.heading}</h1>
     <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#4a4a5e;">${opts.intro}</p>
@@ -78,11 +83,11 @@ function buttonEmail(opts: ButtonEmailOptions): string {
     </table>
     ${opts.outro ? `<p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#4a4a5e;">${opts.outro}</p>` : ""}
     <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#8a8aa0;">
-      If the button doesn't work, copy and paste this link into your browser:<br />
+      ${t.buttonFallback}<br />
       <a href="${opts.ctaUrl}" style="color:#4f46e5;word-break:break-all;">${opts.ctaUrl}</a>
     </p>
     ${opts.footnote ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#a0a0b4;">${opts.footnote}</p>` : ""}
-  `);
+  `, opts.locale);
 }
 
 async function send(opts: {
@@ -122,23 +127,26 @@ export async function sendSigningInvite(opts: {
   documentTitle: string;
   message?: string | null;
   signUrl: string;
+  locale?: Locale;
 }): Promise<void> {
-  const subject = `${opts.senderName} requests your signature: ${opts.documentTitle}`;
-  const intro = `${escapeHtml(opts.senderName)} has invited you to review and sign <strong>${escapeHtml(
+  const locale = opts.locale ?? DEFAULT_LOCALE;
+  const t = dictionaries[locale].emails;
+  const subject = `${opts.senderName}${t.inviteSubjectInfix}${opts.documentTitle}`;
+  const intro = `${escapeHtml(opts.senderName)}${t.inviteIntroMid}<strong>${escapeHtml(
     opts.documentTitle,
-  )}</strong>.`;
+  )}</strong>${t.inviteIntroSuffix}`;
   const html = buttonEmail({
-    heading: `Hi ${escapeHtml(opts.recipientName)},`,
+    heading: `${t.inviteHeadingPrefix}${escapeHtml(opts.recipientName)}${t.inviteHeadingSuffix}`,
     intro,
-    ctaLabel: "Review & sign",
+    ctaLabel: t.reviewCta,
     ctaUrl: opts.signUrl,
     outro: opts.message
       ? `<span style="display:block;padding:14px 16px;background:#f6f5ff;border:1px solid #e6e3ff;border-radius:10px;color:#3f3f5a;">“${escapeHtml(
           opts.message,
         )}”</span>`
       : undefined,
-    footnote:
-      "This signing link is unique to you — please don't forward it to anyone else.",
+    footnote: t.inviteFootnote,
+    locale,
   });
 
   await send({ to: opts.to, subject, html, keyUrl: opts.signUrl });
@@ -147,15 +155,18 @@ export async function sendSigningInvite(opts: {
 export async function sendMagicLink(opts: {
   to: string;
   url: string;
+  locale?: Locale;
 }): Promise<void> {
-  const subject = `Your ${BRAND} sign-in link`;
+  const locale = opts.locale ?? DEFAULT_LOCALE;
+  const t = dictionaries[locale].emails;
+  const subject = `${t.magicLinkSubjectPrefix}${BRAND}${t.magicLinkSubjectSuffix}`;
   const html = buttonEmail({
-    heading: "Sign in to Ko-sign",
-    intro:
-      "Click the button below to securely sign in. This link expires shortly and can be used once.",
-    ctaLabel: "Sign in",
+    heading: `${t.magicLinkHeadingPrefix}${BRAND}${t.magicLinkHeadingSuffix}`,
+    intro: t.magicLinkIntro,
+    ctaLabel: t.magicLinkCta,
     ctaUrl: opts.url,
-    footnote: "If you didn't request this, you can safely ignore this email.",
+    footnote: t.magicLinkFootnote,
+    locale,
   });
 
   await send({ to: opts.to, subject, html, keyUrl: opts.url });
@@ -165,17 +176,20 @@ export async function sendCompletedNotice(opts: {
   to: string;
   documentTitle: string;
   downloadUrl: string;
+  locale?: Locale;
 }): Promise<void> {
-  const subject = `Completed: ${opts.documentTitle}`;
+  const locale = opts.locale ?? DEFAULT_LOCALE;
+  const t = dictionaries[locale].emails;
+  const subject = `${t.completedSubjectPrefix}${opts.documentTitle}`;
   const html = buttonEmail({
-    heading: "Your document is complete",
-    intro: `All parties have signed <strong>${escapeHtml(
+    heading: t.completedHeading,
+    intro: `${t.completedIntroPrefix}<strong>${escapeHtml(
       opts.documentTitle,
-    )}</strong>. A finalized copy with a full audit certificate is ready to download.`,
-    ctaLabel: "Download signed PDF",
+    )}</strong>${t.completedIntroSuffix}`,
+    ctaLabel: t.completedCta,
     ctaUrl: opts.downloadUrl,
-    footnote:
-      "The finalized PDF includes a Certificate of Completion and is tamper-evident.",
+    footnote: t.completedFootnote,
+    locale,
   });
 
   await send({ to: opts.to, subject, html, keyUrl: opts.downloadUrl });

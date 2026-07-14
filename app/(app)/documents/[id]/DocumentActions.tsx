@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Alert, Button, Dialog } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { resendToRecipient, voidEnvelope } from "../actions";
 
 /* -------------------------------------------------------------------------- */
@@ -11,6 +12,7 @@ import { resendToRecipient, voidEnvelope } from "../actions";
 /* -------------------------------------------------------------------------- */
 
 export function VoidEnvelopeButton({ documentId }: { documentId: string }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,13 +34,13 @@ export function VoidEnvelopeButton({ documentId }: { documentId: string }) {
   return (
     <>
       <Button variant="danger" onClick={() => setOpen(true)}>
-        Void envelope
+        {t.sender.voidEnvelope}
       </Button>
       <Dialog
         open={open}
         onClose={() => (pending ? undefined : setOpen(false))}
-        title="Void this envelope?"
-        description="Voiding stops the signing process. Recipients can no longer open or sign it, and this cannot be undone."
+        title={t.sender.voidConfirmTitle}
+        description={t.sender.voidConfirmDescription}
         footer={
           <>
             <Button
@@ -46,10 +48,10 @@ export function VoidEnvelopeButton({ documentId }: { documentId: string }) {
               onClick={() => setOpen(false)}
               disabled={pending}
             >
-              Cancel
+              {t.common.cancel}
             </Button>
             <Button variant="danger" loading={pending} onClick={confirmVoid}>
-              Void envelope
+              {t.sender.voidEnvelope}
             </Button>
           </>
         }
@@ -69,6 +71,7 @@ export function VoidEnvelopeButton({ documentId }: { documentId: string }) {
 /* -------------------------------------------------------------------------- */
 
 export function ResendButton({ recipientId }: { recipientId: string }) {
+  const { t } = useI18n();
   const [pending, startTransition] = useTransition();
   const [status, setStatus] = useState<
     { kind: "sent" } | { kind: "error"; message: string } | null
@@ -87,11 +90,11 @@ export function ResendButton({ recipientId }: { recipientId: string }) {
   return (
     <div className="flex flex-col items-end gap-1">
       <Button size="sm" variant="secondary" loading={pending} onClick={resend}>
-        Resend invite
+        {t.sender.resendInvite}
       </Button>
       {status?.kind === "sent" && (
         <span className="text-xs text-tone-success" role="status">
-          Invite sent
+          {t.sender.inviteSent}
         </span>
       )}
       {status?.kind === "error" && (

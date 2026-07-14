@@ -1,4 +1,7 @@
+"use client";
+
 import { cn } from "@/lib/ui";
+import { useI18n } from "@/lib/i18n/provider";
 
 export interface SpinnerProps
   extends React.HTMLAttributes<HTMLSpanElement> {
@@ -11,11 +14,13 @@ export interface SpinnerProps
 /** Indeterminate loading spinner. Inherits `currentColor`. */
 export function Spinner({
   size = 18,
-  label = "Loading",
+  label,
   className,
   style,
   ...props
 }: SpinnerProps) {
+  const { t } = useI18n();
+  const resolvedLabel = label ?? t.common.loading;
   return (
     <span
       role="status"
@@ -47,7 +52,7 @@ export function Spinner({
           strokeLinecap="round"
         />
       </svg>
-      <span className="sr-only">{label}</span>
+      <span className="sr-only">{resolvedLabel}</span>
     </span>
   );
 }

@@ -14,6 +14,7 @@ import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 import { Alert, Button, Input, Label, Spinner } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { newId } from "@/lib/crypto";
 import type { FieldType } from "@/lib/types";
 import { cn } from "@/lib/ui";
@@ -95,6 +96,7 @@ export function PrepareEditor({
   initialRecipients,
   initialFields,
 }: PrepareEditorProps) {
+  const { t } = useI18n();
   const router = useRouter();
 
   const [recipients, setRecipients] = useState<EditorRecipient[]>(() =>
@@ -231,18 +233,18 @@ export function PrepareEditor({
   /* ----- persistence ----- */
 
   const validate = useCallback((): string | null => {
-    if (recipients.length === 0) return "Add at least one recipient.";
+    if (recipients.length === 0) return t.prepare.errAddRecipient;
     for (const r of recipients) {
-      if (!r.name.trim()) return "Every recipient needs a name.";
+      if (!r.name.trim()) return t.prepare.errRecipientName;
       if (!EMAIL_RE.test(r.email.trim())) {
-        return `“${r.name || r.email || "A recipient"}” needs a valid email address.`;
+        return `“${r.name || r.email || t.prepare.aRecipient}” ${t.prepare.needsValidEmail}`;
       }
     }
     if (fields.length === 0) {
-      return "Place at least one field on the document.";
+      return t.prepare.errPlaceField;
     }
     return null;
-  }, [recipients, fields]);
+  }, [recipients, fields, t]);
 
   const buildPayload = useCallback(
     () => ({
@@ -276,10 +278,10 @@ export function PrepareEditor({
     });
     const data = (await res.json().catch(() => null)) as SaveResponse | null;
     if (!res.ok || !data?.ok) {
-      throw new Error(data?.error ?? "We couldn't save your changes.");
+      throw new Error(data?.error ?? t.prepare.saveError);
     }
     return true;
-  }, [documentId, buildPayload]);
+  }, [documentId, buildPayload, t]);
 
   const onSaveDraft = useCallback(async () => {
     if (busy) return;
@@ -288,19 +290,19 @@ export function PrepareEditor({
       recipients.length > 0 &&
       recipients.find((r) => r.email.trim() && !EMAIL_RE.test(r.email.trim()));
     if (invalid) {
-      setError(`“${invalid.name || invalid.email}” has an invalid email.`);
+      setError(`“${invalid.name || invalid.email}” ${t.prepare.hasInvalidEmail}`);
       return;
     }
     setSaving(true);
     try {
       await save();
-      setToast("Draft saved.");
+      setToast(t.prepare.draftSaved);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save.");
+      setError(err instanceof Error ? err.message : t.prepare.saveFailed);
     } finally {
       setSaving(false);
     }
-  }, [busy, recipients, save]);
+  }, [busy, recipients, save, t]);
 
   const onSend = useCallback(async () => {
     if (busy) return;
@@ -318,14 +320,14 @@ export function PrepareEditor({
       });
       const data = (await res.json().catch(() => null)) as SaveResponse | null;
       if (!res.ok || !data?.ok) {
-        throw new Error(data?.error ?? "We couldn't send this envelope.");
+        throw new Error(data?.error ?? t.prepare.sendError);
       }
       router.push(`/documents/${documentId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send.");
+      setError(err instanceof Error ? err.message : t.prepare.sendFailed);
       setSending(false);
     }
-  }, [busy, validate, save, documentId, router]);
+  }, [busy, validate, save, documentId, router, t]);
 
   /* ----- render ----- */
 
@@ -364,10 +366,10 @@ export function PrepareEditor({
             />
             <span>
               <span className="block text-sm font-medium text-foreground">
-                Require identity verification
+                {t.prepare.requireIdentity}
               </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
-                Signers with a phone number receive an SMS code before signing.
+                {t.prepare.requireIdentityHint}
               </span>
             </span>
           </label>
@@ -383,10 +385,10 @@ export function PrepareEditor({
             </h1>
             <p className="text-xs text-muted-foreground">
               {activeTool
-                ? "Click on the document to place the field."
+                ? t.prepare.clickToPlace
                 : activeRecipient
-                  ? `Placing fields for ${activeRecipient.name || "recipient"}. Pick a field type.`
-                  : "Add a recipient to begin placing fields."}
+                  ? `${t.prepare.placingPrefix}${activeRecipient.name || t.prepare.recipientFallback}${t.prepare.placingSuffix}`
+                  : t.prepare.addRecipientToBegin}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -396,16 +398,16 @@ export function PrepareEditor({
               loading={saving}
               disabled={busy}
             >
-              Save draft
+              {t.prepare.saveDraft}
             </Button>
             <Button onClick={onSend} loading={sending} disabled={busy}>
-              Send envelope
+              {t.prepare.sendEnvelope}
             </Button>
           </div>
         </header>
 
         {error && (
-          <Alert variant="error" title="Please fix the following">
+          <Alert variant="error" title={t.prepare.fixFollowing}>
             {error}
           </Alert>
         )}
@@ -428,7 +430,7 @@ export function PrepareEditor({
                 colorBase={colorForIndex(recipientIndex.get(f.recipientId) ?? 0).base}
                 recipientLabel={
                   recipients.find((r) => r.id === f.recipientId)?.name ||
-                  "Recipient"
+                  t.prepare.recipientLabelFallback
                 }
                 selected={selectedFieldId === f.id}
                 onSelect={() => setSelectedFieldId(f.id)}
@@ -468,18 +470,19 @@ function RecipientPanel({
   onRemove: (id: string) => void;
   onMove: (id: string, dir: -1 | 1) => void;
 }) {
+  const { t } = useI18n();
   return (
     <section className="rounded-xl border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold text-foreground">Recipients</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t.prepare.recipients}</h2>
         <Button size="sm" variant="ghost" onClick={onAdd} disabled={disabled}>
-          + Add
+          {t.prepare.add}
         </Button>
       </div>
 
       {recipients.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-          No recipients yet. Add the people who need to sign.
+          {t.prepare.noRecipients}
         </p>
       ) : (
         <ul className="flex flex-col gap-3 p-3">
@@ -514,30 +517,30 @@ function RecipientPanel({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-foreground">
-                        {r.name || "Unnamed recipient"}
+                        {r.name || t.prepare.unnamedRecipient}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {count} {count === 1 ? "field" : "fields"}
+                        {count} {count === 1 ? t.prepare.fieldSingular : t.prepare.fieldPlural}
                       </span>
                     </span>
                   </button>
                   <div className="flex shrink-0 items-center">
                     <IconButton
-                      label="Move up"
+                      label={t.prepare.moveUp}
                       disabled={disabled || i === 0}
                       onClick={() => onMove(r.id, -1)}
                     >
                       <path d="m6 15 6-6 6 6" />
                     </IconButton>
                     <IconButton
-                      label="Move down"
+                      label={t.prepare.moveDown}
                       disabled={disabled || i === recipients.length - 1}
                       onClick={() => onMove(r.id, 1)}
                     >
                       <path d="m6 9 6 6 6-6" />
                     </IconButton>
                     <IconButton
-                      label="Remove recipient"
+                      label={t.prepare.removeRecipient}
                       disabled={disabled}
                       onClick={() => onRemove(r.id)}
                     >
@@ -549,38 +552,38 @@ function RecipientPanel({
                 <div className="flex flex-col gap-2">
                   <div>
                     <Label htmlFor={`rcp-name-${r.id}`} className="sr-only">
-                      Name
+                      {t.prepare.nameLabel}
                     </Label>
                     <Input
                       id={`rcp-name-${r.id}`}
                       value={r.name}
-                      placeholder="Full name"
+                      placeholder={t.prepare.fullNamePlaceholder}
                       disabled={disabled}
                       onChange={(e) => onUpdate(r.id, { name: e.target.value })}
                     />
                   </div>
                   <div>
                     <Label htmlFor={`rcp-email-${r.id}`} className="sr-only">
-                      Email
+                      {t.prepare.emailLabel}
                     </Label>
                     <Input
                       id={`rcp-email-${r.id}`}
                       type="email"
                       value={r.email}
-                      placeholder="name@example.com"
+                      placeholder={t.prepare.emailPlaceholder}
                       disabled={disabled}
                       onChange={(e) => onUpdate(r.id, { email: e.target.value })}
                     />
                   </div>
                   <div>
                     <Label htmlFor={`rcp-phone-${r.id}`} className="sr-only">
-                      Phone (optional)
+                      {t.prepare.phoneLabel}
                     </Label>
                     <Input
                       id={`rcp-phone-${r.id}`}
                       type="tel"
                       value={r.phone}
-                      placeholder="Phone (optional, for SMS code)"
+                      placeholder={t.prepare.phonePlaceholder}
                       disabled={disabled}
                       onChange={(e) => onUpdate(r.id, { phone: e.target.value })}
                     />
@@ -645,14 +648,15 @@ function FieldPalette({
   canPlace: boolean;
   onPick: (type: FieldType) => void;
 }) {
+  const { t } = useI18n();
   return (
     <section className="rounded-xl border border-border bg-surface p-3">
       <h2 className="px-1 pb-2 text-sm font-semibold text-foreground">
-        Fields
+        {t.prepare.fields}
       </h2>
       {!canPlace && (
         <p className="px-1 pb-2 text-xs text-muted-foreground">
-          Select a recipient first.
+          {t.prepare.selectRecipientFirst}
         </p>
       )}
       <div className="grid grid-cols-2 gap-2">
@@ -665,7 +669,7 @@ function FieldPalette({
               disabled={!canPlace}
               onClick={() => onPick(meta.type)}
               aria-pressed={active}
-              title={meta.hint}
+              title={t.fields[meta.type].hint}
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
                 "disabled:pointer-events-none disabled:opacity-50",
@@ -687,7 +691,7 @@ function FieldPalette({
               >
                 <path d={meta.icon} />
               </svg>
-              <span className="truncate">{meta.label}</span>
+              <span className="truncate">{t.fields[meta.type].label}</span>
             </button>
           );
         })}
@@ -713,6 +717,7 @@ function PdfCanvas({
   onPlace: (page: number, nx: number, ny: number) => void;
   renderPageFields: (page: number) => ReactNode;
 }) {
+  const { t } = useI18n();
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -724,17 +729,17 @@ function PdfCanvas({
         if (!cancelled) setPdf(loaded);
       })
       .catch(() => {
-        if (!cancelled) setError("We couldn't display this document.");
+        if (!cancelled) setError(t.prepare.previewError);
       });
     return () => {
       cancelled = true;
       task.destroy();
     };
-  }, [pdfUrl]);
+  }, [pdfUrl, t]);
 
   if (error) {
     return (
-      <Alert variant="error" title="Preview unavailable">
+      <Alert variant="error" title={t.prepare.previewUnavailable}>
         {error}
       </Alert>
     );
@@ -743,7 +748,7 @@ function PdfCanvas({
   if (!pdf) {
     return (
       <div className="flex items-center justify-center gap-3 rounded-2xl border border-border bg-surface py-24 text-sm text-muted-foreground">
-        <Spinner size={18} /> Loading document…
+        <Spinner size={18} /> {t.prepare.loadingDocument}
       </div>
     );
   }
@@ -778,6 +783,7 @@ function PdfPage({
   onPlace: (nx: number, ny: number) => void;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [renderWidth, setRenderWidth] = useState(0);
@@ -845,7 +851,7 @@ function PdfPage({
   return (
     <div className="w-full max-w-3xl">
       <div className="mb-1.5 text-center text-xs font-medium text-muted-foreground">
-        Page {pageNumber}
+        {t.prepare.page} {pageNumber}
       </div>
       <div
         ref={wrapRef}
@@ -859,7 +865,7 @@ function PdfPage({
         <canvas
           ref={canvasRef}
           className="pointer-events-none block h-auto w-full"
-          aria-label={`Document page ${pageNumber}`}
+          aria-label={`${t.prepare.documentPage} ${pageNumber}`}
         />
         {children}
       </div>
@@ -890,6 +896,7 @@ function FieldBox({
   onChange: (patch: Partial<Omit<EditorField, "id">>) => void;
   onRemove: () => void;
 }) {
+  const { t } = useI18n();
   const elRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     mode: DragMode;
@@ -979,7 +986,7 @@ function FieldBox({
       ref={elRef}
       role="button"
       tabIndex={0}
-      aria-label={`${field.type} field for ${recipientLabel}`}
+      aria-label={`${t.fields[field.type].label} ${t.prepare.fieldFor} ${recipientLabel}`}
       onPointerDown={(e) => beginDrag("move", e)}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
@@ -1016,7 +1023,7 @@ function FieldBox({
       {/* Delete affordance */}
       <button
         type="button"
-        aria-label="Delete field"
+        aria-label={t.prepare.deleteField}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
@@ -1044,7 +1051,7 @@ function FieldBox({
       {/* Resize handle */}
       <span
         role="slider"
-        aria-label="Resize field"
+        aria-label={t.prepare.resizeField}
         aria-valuenow={Math.round(field.width * 100)}
         tabIndex={-1}
         onPointerDown={(e) => beginDrag("resize", e)}
