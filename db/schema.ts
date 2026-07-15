@@ -129,6 +129,30 @@ export const recipients = pgTable("recipients", {
     .defaultNow(),
 });
 
+/**
+ * A set of checkboxes the signer chooses *among* ("tick one of these", "tick
+ * any that apply") rather than each being independently mandatory. The rule
+ * lives on the group, so a member checkbox's own `required` is not consulted.
+ */
+export const fieldGroups = pgTable("field_groups", {
+  id: text("id").primaryKey(),
+  documentId: text("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  recipientId: text("recipient_id")
+    .notNull()
+    .references(() => recipients.id, { onDelete: "cascade" }),
+  /** Shown to the signer, e.g. "Promotion methods". */
+  label: text("label"),
+  /** Fewest members that must be ticked. 0 makes the whole group optional. */
+  minSelected: integer("min_selected").notNull().default(1),
+  /** Most members that may be ticked. NULL = no limit; 1 = radio behavior. */
+  maxSelected: integer("max_selected"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const fields = pgTable("fields", {
   id: text("id").primaryKey(),
   documentId: text("document_id")
@@ -137,6 +161,10 @@ export const fields = pgTable("fields", {
   recipientId: text("recipient_id")
     .notNull()
     .references(() => recipients.id, { onDelete: "cascade" }),
+  /** Checkbox fields only: the choice group this box belongs to, if any. */
+  groupId: text("group_id").references(() => fieldGroups.id, {
+    onDelete: "set null",
+  }),
   type: fieldType("type").notNull(),
   page: integer("page").notNull(),
   x: real("x").notNull(),
@@ -205,6 +233,7 @@ export const documentsRelations = relations(documents, ({ one, many }) => ({
     references: [users.id],
   }),
   recipients: many(recipients),
+  fieldGroups: many(fieldGroups),
   fields: many(fields),
   auditEvents: many(auditEvents),
 }));
@@ -214,9 +243,22 @@ export const recipientsRelations = relations(recipients, ({ one, many }) => ({
     fields: [recipients.documentId],
     references: [documents.id],
   }),
+  fieldGroups: many(fieldGroups),
   fields: many(fields),
   signatures: many(signatures),
   auditEvents: many(auditEvents),
+}));
+
+export const fieldGroupsRelations = relations(fieldGroups, ({ one, many }) => ({
+  document: one(documents, {
+    fields: [fieldGroups.documentId],
+    references: [documents.id],
+  }),
+  recipient: one(recipients, {
+    fields: [fieldGroups.recipientId],
+    references: [recipients.id],
+  }),
+  fields: many(fields),
 }));
 
 export const fieldsRelations = relations(fields, ({ one, many }) => ({
@@ -227,6 +269,10 @@ export const fieldsRelations = relations(fields, ({ one, many }) => ({
   recipient: one(recipients, {
     fields: [fields.recipientId],
     references: [recipients.id],
+  }),
+  group: one(fieldGroups, {
+    fields: [fields.groupId],
+    references: [fieldGroups.id],
   }),
   signatures: many(signatures),
 }));
@@ -269,6 +315,9 @@ export type NewDocument = typeof documents.$inferInsert;
 export type Recipient = typeof recipients.$inferSelect;
 export type NewRecipient = typeof recipients.$inferInsert;
 
+export type FieldGroup = typeof fieldGroups.$inferSelect;
+export type NewFieldGroup = typeof fieldGroups.$inferInsert;
+
 export type Field = typeof fields.$inferSelect;
 export type NewField = typeof fields.$inferInsert;
 
@@ -294,6 +343,7 @@ export const schema = {
   authTokens,
   documents,
   recipients,
+  fieldGroups,
   fields,
   signatures,
   auditEvents,
@@ -301,6 +351,7 @@ export const schema = {
   authTokensRelations,
   documentsRelations,
   recipientsRelations,
+  fieldGroupsRelations,
   fieldsRelations,
   signaturesRelations,
   auditEventsRelations,

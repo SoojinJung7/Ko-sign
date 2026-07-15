@@ -1,4 +1,4 @@
-import type { FieldType } from "@/lib/types";
+import type { FieldType, GroupRule } from "@/lib/types";
 
 /** A single fillable field belonging to the current signer (normalized coords). */
 export interface SignerField {
@@ -12,6 +12,14 @@ export interface SignerField {
   width: number;
   height: number;
   required: boolean;
+  /** Checkbox fields only: the choice group this box belongs to, if any. */
+  groupId: string | null;
+}
+
+/** A set of checkboxes the signer picks among; see `GroupRule`. */
+export interface SignerGroup extends GroupRule {
+  id: string;
+  label: string | null;
 }
 
 /** The value a signer has entered for one field. */

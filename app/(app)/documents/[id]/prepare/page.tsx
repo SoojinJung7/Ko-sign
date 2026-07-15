@@ -5,6 +5,7 @@ import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   documents,
+  fieldGroups as fieldGroupsTable,
   fields as fieldsTable,
   recipients as recipientsTable,
 } from "@/db/schema";
@@ -12,6 +13,7 @@ import { requireUser } from "@/lib/session";
 import {
   PrepareEditor,
   type EditorField,
+  type EditorGroup,
   type EditorRecipient,
 } from "@/components/prepare/PrepareEditor";
 
@@ -36,12 +38,17 @@ export default async function PreparePage({
   // Only drafts are editable; sent/completed envelopes go to their detail view.
   if (doc.status !== "draft") redirect(`/documents/${id}`);
 
-  const [recipientRows, fieldRows] = await Promise.all([
+  const [recipientRows, groupRows, fieldRows] = await Promise.all([
     db
       .select()
       .from(recipientsTable)
       .where(eq(recipientsTable.documentId, id))
       .orderBy(asc(recipientsTable.order), asc(recipientsTable.createdAt)),
+    db
+      .select()
+      .from(fieldGroupsTable)
+      .where(eq(fieldGroupsTable.documentId, id))
+      .orderBy(asc(fieldGroupsTable.createdAt)),
     db.select().from(fieldsTable).where(eq(fieldsTable.documentId, id)),
   ]);
 
@@ -53,9 +60,18 @@ export default async function PreparePage({
     order: r.order,
   }));
 
+  const initialGroups: EditorGroup[] = groupRows.map((g) => ({
+    id: g.id,
+    recipientId: g.recipientId,
+    label: g.label ?? "",
+    minSelected: g.minSelected,
+    maxSelected: g.maxSelected,
+  }));
+
   const initialFields: EditorField[] = fieldRows.map((f) => ({
     id: f.id,
     recipientId: f.recipientId,
+    groupId: f.groupId,
     type: f.type,
     page: f.page,
     x: f.x,
@@ -73,6 +89,7 @@ export default async function PreparePage({
       pdfUrl={`/api/documents/${doc.id}/file`}
       requireIdentityCheck={doc.requireIdentityCheck}
       initialRecipients={initialRecipients}
+      initialGroups={initialGroups}
       initialFields={initialFields}
     />
   );

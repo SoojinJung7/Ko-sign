@@ -1,12 +1,5 @@
 import { asc, eq, inArray } from "drizzle-orm";
-import {
-  PDFDocument,
-  PDFFont,
-  PDFPage,
-  StandardFonts,
-  degrees,
-  rgb,
-} from "pdf-lib";
+import { PDFDocument, PDFFont, PDFPage, degrees, rgb } from "pdf-lib";
 
 import { db } from "@/db";
 import {
@@ -22,6 +15,7 @@ import {
 } from "@/db/schema";
 import { sha256Hex } from "@/lib/crypto";
 import { getPdfBytes } from "@/lib/blob";
+import { FontBook } from "@/lib/fonts";
 
 export const runtime = "nodejs";
 
@@ -220,11 +214,6 @@ function fmtDate(value: Date | null | undefined): string {
   }).format(value);
 }
 
-interface CertFonts {
-  regular: PDFFont;
-  bold: PDFFont;
-}
-
 const PAGE_W = 612;
 const PAGE_H = 792;
 const MARGIN = 54;
@@ -237,7 +226,7 @@ class CertificateWriter {
 
   constructor(
     private readonly doc: PDFDocument,
-    private readonly fonts: CertFonts,
+    private readonly fonts: FontBook,
   ) {
     this.page = doc.addPage([PAGE_W, PAGE_H]);
     this.cursor = PAGE_H - MARGIN;
@@ -250,25 +239,25 @@ class CertificateWriter {
     }
   }
 
-  heading(text: string): void {
+  async heading(text: string): Promise<void> {
     this.ensureSpace(34);
     this.page.drawText(text, {
       x: MARGIN,
       y: this.cursor - 22,
       size: 22,
-      font: this.fonts.bold,
+      font: await this.fonts.bold(text),
       color: INK,
     });
     this.cursor -= 34;
   }
 
-  subheading(text: string): void {
+  async subheading(text: string): Promise<void> {
     this.ensureSpace(26);
     this.page.drawText(text, {
       x: MARGIN,
       y: this.cursor - 14,
       size: 13,
-      font: this.fonts.bold,
+      font: await this.fonts.bold(text),
       color: INK,
     });
     this.cursor -= 22;
@@ -285,25 +274,29 @@ class CertificateWriter {
     this.cursor -= 16;
   }
 
-  keyValue(label: string, value: string): void {
+  async keyValue(label: string, value: string): Promise<void> {
     this.ensureSpace(16);
     const labelSize = 9.5;
     const valueSize = 10.5;
-    this.page.drawText(label.toUpperCase(), {
+    const labelText = label.toUpperCase();
+    this.page.drawText(labelText, {
       x: MARGIN,
       y: this.cursor - 11,
       size: labelSize,
-      font: this.fonts.bold,
+      font: await this.fonts.bold(labelText),
       color: MUTED,
     });
-    const wrapped = this.wrap(value, valueSize, PAGE_W - MARGIN - 200);
+    // One font for the whole value: wrapping measures with the same face it
+    // draws with, and a value is never split across faces mid-line.
+    const valueFont = await this.fonts.regular(value);
+    const wrapped = wrap(value, valueFont, valueSize, PAGE_W - MARGIN - 200);
     let vy = this.cursor - 11;
     for (const line of wrapped) {
       this.page.drawText(line, {
         x: MARGIN + 150,
         y: vy,
         size: valueSize,
-        font: this.fonts.regular,
+        font: valueFont,
         color: INK,
       });
       vy -= valueSize + 3;
@@ -314,26 +307,32 @@ class CertificateWriter {
   spacer(amount = 10): void {
     this.cursor -= amount;
   }
+}
 
-  private wrap(text: string, size: number, maxWidth: number): string[] {
-    const words = text.split(/\s+/);
-    const lines: string[] = [];
-    let current = "";
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word;
-      if (
-        this.fonts.regular.widthOfTextAtSize(candidate, size) > maxWidth &&
-        current
-      ) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = candidate;
-      }
+/**
+ * Greedy word wrap. Korean runs without spaces can't be split this way, so an
+ * over-long unbroken run is left to overflow rather than being cut mid-word.
+ */
+function wrap(
+  text: string,
+  font: PDFFont,
+  size: number,
+  maxWidth: number,
+): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (font.widthOfTextAtSize(candidate, size) > maxWidth && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
     }
-    if (current) lines.push(current);
-    return lines.length ? lines : [""];
   }
+  if (current) lines.push(current);
+  return lines.length ? lines : [""];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -390,9 +389,7 @@ export async function finalizeDocument(
     ignoreEncryption: true,
   });
   const pages = pdfDoc.getPages();
-  const helv = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const helvBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-  const helvItalic = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
+  const fonts = await FontBook.create(pdfDoc);
 
   const sigByFieldId = new Map<string, Signature>();
   for (const sig of docSignatures) sigByFieldId.set(sig.fieldId, sig);
@@ -436,17 +433,17 @@ export async function finalizeDocument(
             });
           } catch {
             // Corrupt image data — fall back to any typed value.
-            drawFittedText(page, textValue, place, helvItalic);
+            drawFittedText(page, textValue, place, await fonts.italic(textValue));
           }
         } else if (textValue) {
           // Typed signature: render in an italic hand-ish style.
-          drawFittedText(page, textValue, place, helvItalic);
+          drawFittedText(page, textValue, place, await fonts.italic(textValue));
         }
         break;
       }
       case "date":
       case "text": {
-        drawFittedText(page, textValue, place, helv);
+        drawFittedText(page, textValue, place, await fonts.regular(textValue));
         break;
       }
       case "checkbox": {
@@ -465,48 +462,45 @@ export async function finalizeDocument(
     }
   }
 
-  const cert = new CertificateWriter(pdfDoc, {
-    regular: helv,
-    bold: helvBold,
-  });
+  const cert = new CertificateWriter(pdfDoc, fonts);
 
-  cert.heading("Certificate of Completion");
+  await cert.heading("Certificate of Completion");
   cert.spacer(4);
-  cert.keyValue("Document", doc.title);
-  cert.keyValue("Document ID", doc.id);
+  await cert.keyValue("Document", doc.title);
+  await cert.keyValue("Document ID", doc.id);
   // finalizeDocument only ever runs at the completion moment, so the document's
   // effective status is "completed" even though the DB row is flipped by the
   // caller immediately after this returns.
-  cert.keyValue("Status", "completed");
-  cert.keyValue("Created", fmtDate(doc.createdAt));
-  cert.keyValue("Completed", fmtDate(completedAt));
-  cert.keyValue("Original SHA-256", originalHash);
+  await cert.keyValue("Status", "completed");
+  await cert.keyValue("Created", fmtDate(doc.createdAt));
+  await cert.keyValue("Completed", fmtDate(completedAt));
+  await cert.keyValue("Original SHA-256", originalHash);
   cert.rule();
   cert.spacer(6);
-  cert.subheading("Signers");
+  await cert.subheading("Signers");
   cert.spacer(2);
 
   if (docRecipients.length === 0) {
-    cert.keyValue("Recipients", "None");
+    await cert.keyValue("Recipients", "None");
   }
 
   for (const recipient of docRecipients) {
     const signedEvent = signedByRecipient.get(recipient.id);
-    cert.subheading(`${recipient.name}  ·  ${recipient.role}`);
-    cert.keyValue("Email", recipient.email);
-    cert.keyValue("Status", recipient.status);
-    cert.keyValue(
+    await cert.subheading(`${recipient.name}  ·  ${recipient.role}`);
+    await cert.keyValue("Email", recipient.email);
+    await cert.keyValue("Status", recipient.status);
+    await cert.keyValue(
       "Signed at",
       fmtDate(recipient.signedAt ?? signedEvent?.createdAt ?? null),
     );
-    cert.keyValue("IP address", signedEvent?.ip ?? "—");
-    cert.keyValue("User agent", signedEvent?.userAgent ?? "—");
-    cert.keyValue(
+    await cert.keyValue("IP address", signedEvent?.ip ?? "—");
+    await cert.keyValue("User agent", signedEvent?.userAgent ?? "—");
+    await cert.keyValue(
       "Identity (OTP) verified",
       recipient.otpVerifiedAt ? `Yes · ${fmtDate(recipient.otpVerifiedAt)}` : "No",
     );
     if (recipient.declinedReason) {
-      cert.keyValue("Declined reason", recipient.declinedReason);
+      await cert.keyValue("Declined reason", recipient.declinedReason);
     }
     cert.rule();
     cert.spacer(4);

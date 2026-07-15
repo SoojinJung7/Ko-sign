@@ -11,8 +11,10 @@ import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 import { Alert, Spinner } from "@/components/ui";
+import { groupIsRequired, groupRuleLabel, groupSatisfied } from "@/lib/types";
 import { cn } from "@/lib/ui";
-import type { FieldValue, SignerField } from "./types";
+import { checkedCount, fieldHasValue, isChecked } from "./requirements";
+import type { FieldValue, SignerField, SignerGroup } from "./types";
 
 // Local worker (bundled asset, same-origin). pdf.js v6 ships an ESM worker.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -31,10 +33,13 @@ export interface DocumentViewerProps {
   pdfBase64: string;
   pageCount: number;
   fields: SignerField[];
+  groups: SignerGroup[];
   values: Record<string, FieldValue>;
   /** Whether fields are interactive (false once submitted / read-only). */
   interactive: boolean;
   onChange: (fieldId: string, value: FieldValue | null) => void;
+  /** Toggle a checkbox. Group rules (radio swap, ceiling) live in the parent. */
+  onToggleCheckbox: (field: SignerField) => void;
   /** Open the signature pad for a signature / initials field. */
   onOpenSignature: (field: SignerField) => void;
 }
@@ -43,9 +48,11 @@ export function DocumentViewer({
   pdfBase64,
   pageCount,
   fields,
+  groups,
   values,
   interactive,
   onChange,
+  onToggleCheckbox,
   onOpenSignature,
 }: DocumentViewerProps) {
   const bytes = useMemo(() => base64ToBytes(pdfBase64), [pdfBase64]);
@@ -81,6 +88,55 @@ export function DocumentViewer({
     return map;
   }, [fields]);
 
+  /**
+   * A checkbox group's state, resolved once and shared by every member so the
+   * whole set highlights and clears together.
+   */
+  const groupState = useMemo(() => {
+    const map = new Map<
+      string,
+      { group: SignerGroup; satisfied: boolean; members: SignerField[] }
+    >();
+    for (const group of groups) {
+      const members = fields.filter((f) => f.groupId === group.id);
+      map.set(group.id, {
+        group,
+        members,
+        satisfied: groupSatisfied(checkedCount(members, values), group),
+      });
+    }
+    return map;
+  }, [groups, fields, values]);
+
+  /** Rule hints, anchored to the bounding box of each group's boxes on a page. */
+  const hintsByPage = useMemo(() => {
+    const map = new Map<number, GroupHint[]>();
+    if (!interactive) return map;
+
+    for (const { group, members, satisfied } of groupState.values()) {
+      if (satisfied || !groupIsRequired(group)) continue;
+      const pages = new Set(members.map((m) => m.page));
+      for (const page of pages) {
+        const onPage = members.filter((m) => m.page === page);
+        const left = Math.min(...onPage.map((m) => m.x));
+        const top = Math.min(...onPage.map((m) => m.y));
+        const bottom = Math.max(...onPage.map((m) => m.y + m.height));
+        const arr = map.get(page) ?? [];
+        arr.push({
+          id: group.id,
+          text: group.label
+            ? `${group.label} · ${groupRuleLabel(group)}`
+            : groupRuleLabel(group),
+          left,
+          top,
+          bottom,
+        });
+        map.set(page, arr);
+      }
+    }
+    return map;
+  }, [groupState, interactive]);
+
   if (error) {
     return (
       <Alert variant="error" title="Preview unavailable">
@@ -99,17 +155,40 @@ export function DocumentViewer({
 
   return (
     <div className="flex flex-col items-center gap-6">
+      {/* Every grouped box points at its group's rule via aria-describedby. The
+          visible pill can't serve that: it comes and goes with the rule's state. */}
+      {groups.map((group) => (
+        <span key={group.id} id={`sign-group-${group.id}`} className="sr-only">
+          {group.label ? `${group.label}. ` : ""}
+          {groupRuleLabel(group)}
+        </span>
+      ))}
       {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNumber) => (
         <PdfPage key={pageNumber} pdf={pdf} pageNumber={pageNumber}>
-          {(fieldsByPage.get(pageNumber) ?? []).map((field) => (
-            <FieldOverlay
-              key={field.id}
-              field={field}
-              value={values[field.id]}
-              interactive={interactive}
-              onChange={(v) => onChange(field.id, v)}
-              onOpenSignature={() => onOpenSignature(field)}
-            />
+          {(fieldsByPage.get(pageNumber) ?? []).map((field) => {
+            const state = field.groupId
+              ? groupState.get(field.groupId)
+              : undefined;
+            return (
+              <FieldOverlay
+                key={field.id}
+                field={field}
+                value={values[field.id]}
+                // A grouped checkbox is never highlighted on its own: the whole
+                // group stays lit until the group's rule is met, then clears.
+                needsAttention={
+                  state ? !state.satisfied && groupIsRequired(state.group) : field.required
+                }
+                radio={state?.group.maxSelected === 1}
+                interactive={interactive}
+                onChange={(v) => onChange(field.id, v)}
+                onToggle={() => onToggleCheckbox(field)}
+                onOpenSignature={() => onOpenSignature(field)}
+              />
+            );
+          })}
+          {(hintsByPage.get(pageNumber) ?? []).map((hint) => (
+            <GroupHintPill key={hint.id} hint={hint} />
           ))}
         </PdfPage>
       ))}
@@ -206,40 +285,73 @@ function PdfPage({
 }
 
 /* -------------------------------------------------------------------------- */
-/* Field overlay                                                              */
+/* Checkbox group hint                                                        */
 /* -------------------------------------------------------------------------- */
 
-function isChecked(value: FieldValue | undefined): boolean {
-  return (value?.value ?? "").toLowerCase() === "true";
+interface GroupHint {
+  id: string;
+  text: string;
+  /** Normalized bounds of the group's boxes on this page. */
+  left: number;
+  top: number;
+  bottom: number;
 }
 
-function hasValue(field: SignerField, value: FieldValue | undefined): boolean {
-  if (!value) return false;
-  switch (field.type) {
-    case "signature":
-    case "initials":
-      return Boolean(value.imageData || (value.value && value.value.trim()));
-    case "checkbox":
-      return isChecked(value);
-    default:
-      return Boolean(value.value && value.value.trim());
-  }
+/**
+ * "Choose one" — the thing a bare column of checkboxes can't say for itself.
+ * Sits above the group, or below it when the group is too near the page top for
+ * the pill to fit. It only renders while the rule is unmet, so it stops
+ * covering the page as soon as it has been read and acted on.
+ */
+function GroupHintPill({ hint }: { hint: GroupHint }) {
+  const below = hint.top < 0.05;
+  return (
+    <span
+      className={cn(
+        "pointer-events-none absolute z-20 whitespace-nowrap rounded-full border border-brand-400 bg-brand-500 px-2 py-0.5",
+        "text-[clamp(8px,1.1vw,11px)] font-medium leading-tight text-white shadow-sm",
+      )}
+      style={{
+        left: `${hint.left * 100}%`,
+        top: `${(below ? hint.bottom : hint.top) * 100}%`,
+        transform: below
+          ? "translate(-2px, 4px)"
+          : "translate(-2px, calc(-100% - 4px))",
+      }}
+      // The rule is already announced on each member via aria-describedby.
+      aria-hidden="true"
+    >
+      {hint.text}
+    </span>
+  );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Field overlay                                                              */
+/* -------------------------------------------------------------------------- */
 
 function FieldOverlay({
   field,
   value,
+  needsAttention,
+  radio,
   interactive,
   onChange,
+  onToggle,
   onOpenSignature,
 }: {
   field: SignerField;
   value: FieldValue | undefined;
+  /** Highlight this field as outstanding work. */
+  needsAttention: boolean;
+  /** Member of a choose-one group — announce it as a radio, not a checkbox. */
+  radio?: boolean;
   interactive: boolean;
   onChange: (value: FieldValue | null) => void;
+  onToggle: () => void;
   onOpenSignature: () => void;
 }) {
-  const filled = hasValue(field, value);
+  const filled = fieldHasValue(field, value);
 
   const style: React.CSSProperties = {
     position: "absolute",
@@ -251,7 +363,7 @@ function FieldOverlay({
 
   const stateClasses = filled
     ? "border border-tone-success-line bg-tone-success-soft"
-    : field.required
+    : needsAttention
       ? "border-2 border-brand-400 bg-brand-500/10 dark:bg-brand-400/15"
       : "border border-dashed border-border-strong bg-surface/70";
 
@@ -314,19 +426,28 @@ function FieldOverlay({
     );
   }
 
-  // Checkbox → toggle button.
+  // Checkbox → toggle button. Grouped boxes delegate to the parent, which owns
+  // the group's rules; the DOM role follows the rule so assistive tech
+  // announces a choose-one group as the radio group it behaves like.
   if (field.type === "checkbox") {
     const checked = isChecked(value);
     return (
       <button
         type="button"
         id={`sign-field-${field.id}`}
-        role="checkbox"
+        role={radio ? "radio" : "checkbox"}
         aria-checked={checked}
-        aria-label={`Checkbox${field.required ? ", required" : ""}`}
+        aria-describedby={
+          field.groupId ? `sign-group-${field.groupId}` : undefined
+        }
+        aria-label={
+          radio
+            ? "Choice"
+            : `Checkbox${!field.groupId && field.required ? ", required" : ""}`
+        }
         style={style}
         disabled={!interactive}
-        onClick={() => onChange(checked ? null : { value: "true" })}
+        onClick={onToggle}
         className={cn(commonWrap, interactive && "cursor-pointer")}
       >
         {checked && (

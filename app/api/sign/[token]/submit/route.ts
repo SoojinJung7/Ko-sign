@@ -3,14 +3,17 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import {
+  fieldGroups as fieldGroupsTable,
   fields as fieldsTable,
   recipients,
   signatures,
   type Field,
+  type FieldGroup,
 } from "@/db/schema";
 import { newId } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
 import { notifyNextOrFinalize } from "@/lib/envelope";
+import { groupRuleLabel, groupSatisfied } from "@/lib/types";
 
 import {
   hasEarlierPendingSigner,
@@ -116,6 +119,11 @@ export async function POST(
     .from(fieldsTable)
     .where(eq(fieldsTable.recipientId, recipient.id));
 
+  const recipientGroups: FieldGroup[] = await db
+    .select()
+    .from(fieldGroupsTable)
+    .where(eq(fieldGroupsTable.recipientId, recipient.id));
+
   const fieldById = new Map(recipientFields.map((f) => [f.id, f]));
   const entryById = new Map(parsed.fields.map((e) => [e.fieldId, e]));
 
@@ -126,10 +134,31 @@ export async function POST(
     }
   }
 
-  // Every required field must be satisfied.
+  // Every required field must be satisfied. A grouped checkbox is exempt: it is
+  // one option among several, and its group's rule is checked below instead.
   for (const field of recipientFields) {
+    if (field.groupId) continue;
     if (field.required && !isSatisfied(field, entryById.get(field.id))) {
       return jsonError("Please complete all required fields.", 400);
+    }
+  }
+
+  // Each choice group must land inside its min/max.
+  for (const group of recipientGroups) {
+    const members = recipientFields.filter((f) => f.groupId === group.id);
+    const checked = members.filter((f) =>
+      isSatisfied(f, entryById.get(f.id)),
+    ).length;
+    const rule = {
+      minSelected: group.minSelected,
+      maxSelected: group.maxSelected,
+    };
+    if (!groupSatisfied(checked, rule)) {
+      const name = group.label ? `“${group.label}”` : "one of the checkbox groups";
+      return jsonError(
+        `Please review ${name}: ${groupRuleLabel(rule).toLowerCase()}.`,
+        400,
+      );
     }
   }
 
@@ -191,7 +220,20 @@ export async function POST(
   });
 
   // Advance the envelope: email the next signer, or finalize + notify all.
-  await notifyNextOrFinalize(document.id);
+  //
+  // The signature is committed and the recipient is already marked signed, so a
+  // throw here must not fail the response: re-submitting is blocked (409), so
+  // the signer would be told to retry something they can never retry, and the
+  // envelope would be stranded either way. Record the failure and let the owner
+  // retry from the document page (see retryEnvelopeAdvance).
+  try {
+    await notifyNextOrFinalize(document.id);
+  } catch (err) {
+    console.error(
+      `[sign/submit] advancing envelope ${document.id} failed after ${recipient.id} signed:`,
+      err,
+    );
+  }
 
   return jsonOk();
 }

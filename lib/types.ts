@@ -12,6 +12,8 @@ export type {
   NewDocument,
   Recipient,
   NewRecipient,
+  FieldGroup,
+  NewFieldGroup,
   Field,
   NewField,
   Signature,
@@ -144,4 +146,70 @@ export interface FieldPlacement {
   width: number;
   height: number;
   required: boolean;
+  /** Checkbox fields only; see `GroupRule`. */
+  groupId?: string | null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Checkbox choice groups                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How many of a checkbox group's members the signer must / may tick. A grouped
+ * checkbox is never individually required — the group's rule is the whole
+ * requirement, and it is enforced client-side for guidance and server-side for
+ * real (see the submit route).
+ */
+export interface GroupRule {
+  minSelected: number;
+  /** `null` = no upper bound. */
+  maxSelected: number | null;
+}
+
+/** Hard ceiling on members, mirroring the per-document field cap. */
+export const MAX_GROUP_MEMBERS = 100;
+
+export function groupIsRequired(rule: GroupRule): boolean {
+  return rule.minSelected > 0;
+}
+
+export function groupSatisfied(checked: number, rule: GroupRule): boolean {
+  if (checked < rule.minSelected) return false;
+  if (rule.maxSelected !== null && checked > rule.maxSelected) return false;
+  return true;
+}
+
+/**
+ * Why a rule can't be met by a group of `memberCount` boxes, or `null` if it
+ * can. Shared by the editor (to warn early) and the prepare route (to reject).
+ */
+export function groupRuleProblem(
+  rule: GroupRule,
+  memberCount: number,
+): string | null {
+  if (rule.minSelected < 0) return "The minimum can't be negative.";
+  if (rule.maxSelected !== null && rule.maxSelected < 1) {
+    return "The maximum must be at least 1.";
+  }
+  if (rule.maxSelected !== null && rule.maxSelected < rule.minSelected) {
+    return "The maximum can't be lower than the minimum.";
+  }
+  if (memberCount === 0) return "This group has no checkboxes.";
+  if (rule.minSelected > memberCount) {
+    return `This group asks for ${rule.minSelected} but only has ${memberCount} ${
+      memberCount === 1 ? "checkbox" : "checkboxes"
+    }.`;
+  }
+  return null;
+}
+
+/** Signer-facing description of a rule, e.g. "Choose at least 1". */
+export function groupRuleLabel(rule: GroupRule): string {
+  const { minSelected: min, maxSelected: max } = rule;
+  if (max === null) {
+    return min === 0 ? "Choose any (optional)" : `Choose at least ${min}`;
+  }
+  if (min === max) return min === 1 ? "Choose one" : `Choose exactly ${min}`;
+  if (min === 0) return `Choose up to ${max} (optional)`;
+  return `Choose ${min}–${max}`;
 }

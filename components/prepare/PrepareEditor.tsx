@@ -15,7 +15,12 @@ import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 import { Alert, Button, Input, Label, Spinner } from "@/components/ui";
 import { newId } from "@/lib/crypto";
-import type { FieldType } from "@/lib/types";
+import {
+  groupRuleLabel,
+  groupRuleProblem,
+  type FieldType,
+  type GroupRule,
+} from "@/lib/types";
 import { cn } from "@/lib/ui";
 import {
   colorForIndex,
@@ -45,9 +50,18 @@ export interface EditorRecipient {
   order: number;
 }
 
+/** A set of checkboxes the signer chooses among. Client id; remapped on save. */
+export interface EditorGroup extends GroupRule {
+  id: string;
+  recipientId: string;
+  label: string;
+}
+
 export interface EditorField {
   id: string;
   recipientId: string;
+  /** Checkbox fields only. */
+  groupId: string | null;
   type: FieldType;
   page: number;
   /** Normalized 0..1, top-left origin. */
@@ -65,7 +79,31 @@ export interface PrepareEditorProps {
   pdfUrl: string;
   requireIdentityCheck: boolean;
   initialRecipients: EditorRecipient[];
+  initialGroups: EditorGroup[];
   initialFields: EditorField[];
+}
+
+/**
+ * The rules worth naming. Anything else the sender needs is reachable through
+ * "Custom", but these four cover essentially every paper form: pick one, pick
+ * at least one, pick any or none, pick up to N.
+ */
+type RulePreset = "one" | "atLeastOne" | "any" | "custom";
+
+const RULE_PRESETS: { value: Exclude<RulePreset, "custom">; rule: GroupRule }[] =
+  [
+    { value: "one", rule: { minSelected: 1, maxSelected: 1 } },
+    { value: "atLeastOne", rule: { minSelected: 1, maxSelected: null } },
+    { value: "any", rule: { minSelected: 0, maxSelected: null } },
+  ];
+
+function presetFor(rule: GroupRule): RulePreset {
+  const match = RULE_PRESETS.find(
+    (p) =>
+      p.rule.minSelected === rule.minSelected &&
+      p.rule.maxSelected === rule.maxSelected,
+  );
+  return match?.value ?? "custom";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -76,6 +114,19 @@ const clamp = (v: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, v));
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Short badge naming a checkbox's group, or `null` when it has none. A field box
+ * is only a few millimetres wide, so this is the group's name if it has one and
+ * its position in the recipient's group list otherwise.
+ */
+function groupBadgeFor(field: EditorField, groups: EditorGroup[]): string | null {
+  if (!field.groupId) return null;
+  const mine = groups.filter((g) => g.recipientId === field.recipientId);
+  const index = mine.findIndex((g) => g.id === field.groupId);
+  if (index === -1) return null;
+  return mine[index].label.trim() || `Group ${index + 1}`;
+}
 
 interface SaveResponse {
   ok: boolean;
@@ -93,6 +144,7 @@ export function PrepareEditor({
   pdfUrl,
   requireIdentityCheck: initialRequireIdentityCheck,
   initialRecipients,
+  initialGroups,
   initialFields,
 }: PrepareEditorProps) {
   const router = useRouter();
@@ -100,6 +152,7 @@ export function PrepareEditor({
   const [recipients, setRecipients] = useState<EditorRecipient[]>(() =>
     [...initialRecipients].sort((a, b) => a.order - b.order),
   );
+  const [groups, setGroups] = useState<EditorGroup[]>(initialGroups);
   const [fields, setFields] = useState<EditorField[]>(initialFields);
   const [requireIdentityCheck, setRequireIdentityCheck] = useState(
     initialRequireIdentityCheck,
@@ -161,6 +214,7 @@ export function PrepareEditor({
       return next;
     });
     setFields((prev) => prev.filter((f) => f.recipientId !== id));
+    setGroups((prev) => prev.filter((g) => g.recipientId !== id));
   }, []);
 
   const moveRecipient = useCallback((id: string, dir: -1 | 1) => {
@@ -189,6 +243,7 @@ export function PrepareEditor({
         {
           id,
           recipientId: activeRecipientId,
+          groupId: null,
           type: activeTool,
           page,
           x,
@@ -218,6 +273,64 @@ export function PrepareEditor({
     setSelectedFieldId((cur) => (cur === id ? null : cur));
   }, []);
 
+  /* ----- checkbox group mutations ----- */
+
+  /** Move a checkbox into a group (`groupId`), or out of every group (`null`). */
+  const assignFieldToGroup = useCallback(
+    (fieldId: string, groupId: string | null) => {
+      setFields((prev) =>
+        prev.map((f) => (f.id === fieldId ? { ...f, groupId } : f)),
+      );
+    },
+    [],
+  );
+
+  /** Create a group around `fieldId` and return its id. */
+  const createGroupFor = useCallback(
+    (field: EditorField) => {
+      const id = newId("grp");
+      setGroups((prev) => [
+        ...prev,
+        {
+          id,
+          recipientId: field.recipientId,
+          label: "",
+          minSelected: 1,
+          maxSelected: 1,
+        },
+      ]);
+      assignFieldToGroup(field.id, id);
+    },
+    [assignFieldToGroup],
+  );
+
+  const updateGroup = useCallback(
+    (id: string, patch: Partial<Omit<EditorGroup, "id" | "recipientId">>) => {
+      setGroups((prev) =>
+        prev.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+      );
+    },
+    [],
+  );
+
+  /** Dissolve a group, releasing its checkboxes as independent fields. */
+  const removeGroup = useCallback((id: string) => {
+    setGroups((prev) => prev.filter((g) => g.id !== id));
+    setFields((prev) =>
+      prev.map((f) => (f.groupId === id ? { ...f, groupId: null } : f)),
+    );
+  }, []);
+
+  const membersOf = useCallback(
+    (groupId: string) => fields.filter((f) => f.groupId === groupId),
+    [fields],
+  );
+
+  const selectedField = useMemo(
+    () => fields.find((f) => f.id === selectedFieldId) ?? null,
+    [fields, selectedFieldId],
+  );
+
   const fieldsByPage = useMemo(() => {
     const map = new Map<number, EditorField[]>();
     for (const f of fields) {
@@ -230,6 +343,15 @@ export function PrepareEditor({
 
   /* ----- persistence ----- */
 
+  /**
+   * Groups that still have checkboxes. A group whose last member was deleted is
+   * dropped rather than saved as an empty rule the signer could never satisfy.
+   */
+  const liveGroups = useMemo(
+    () => groups.filter((g) => fields.some((f) => f.groupId === g.id)),
+    [groups, fields],
+  );
+
   const validate = useCallback((): string | null => {
     if (recipients.length === 0) return "Add at least one recipient.";
     for (const r of recipients) {
@@ -241,8 +363,14 @@ export function PrepareEditor({
     if (fields.length === 0) {
       return "Place at least one field on the document.";
     }
+    for (const g of liveGroups) {
+      const problem = groupRuleProblem(g, membersOf(g.id).length);
+      if (problem) {
+        return `${g.label ? `“${g.label}”` : "A checkbox group"}: ${problem}`;
+      }
+    }
     return null;
-  }, [recipients, fields]);
+  }, [recipients, fields, liveGroups, membersOf]);
 
   const buildPayload = useCallback(
     () => ({
@@ -254,18 +382,31 @@ export function PrepareEditor({
         phone: r.phone.trim() ? r.phone.trim() : null,
         order: i + 1,
       })),
-      fields: fields.map((f) => ({
-        recipientId: f.recipientId,
-        type: f.type,
-        page: f.page,
-        x: f.x,
-        y: f.y,
-        width: f.width,
-        height: f.height,
-        required: f.required,
+      groups: liveGroups.map((g) => ({
+        id: g.id,
+        recipientId: g.recipientId,
+        label: g.label.trim() ? g.label.trim() : null,
+        minSelected: g.minSelected,
+        maxSelected: g.maxSelected,
       })),
+      fields: fields.map((f) => {
+        const grouped = f.groupId
+          ? liveGroups.some((g) => g.id === f.groupId)
+          : false;
+        return {
+          recipientId: f.recipientId,
+          groupId: grouped ? f.groupId : null,
+          type: f.type,
+          page: f.page,
+          x: f.x,
+          y: f.y,
+          width: f.width,
+          height: f.height,
+          required: f.required,
+        };
+      }),
     }),
-    [requireIdentityCheck, recipients, fields],
+    [requireIdentityCheck, recipients, liveGroups, fields],
   );
 
   const save = useCallback(async (): Promise<boolean> => {
@@ -291,6 +432,16 @@ export function PrepareEditor({
       setError(`“${invalid.name || invalid.email}” has an invalid email.`);
       return;
     }
+    // A draft may hold blank recipients, but never a group rule the server will
+    // reject — that would fail the save with a raw 422 instead of a fixable
+    // message pointing at the group.
+    for (const g of liveGroups) {
+      const problem = groupRuleProblem(g, membersOf(g.id).length);
+      if (problem) {
+        setError(`${g.label ? `“${g.label}”` : "A checkbox group"}: ${problem}`);
+        return;
+      }
+    }
     setSaving(true);
     try {
       await save();
@@ -300,7 +451,7 @@ export function PrepareEditor({
     } finally {
       setSaving(false);
     }
-  }, [busy, recipients, save]);
+  }, [busy, recipients, liveGroups, membersOf, save]);
 
   const onSend = useCallback(async () => {
     if (busy) return;
@@ -352,6 +503,24 @@ export function PrepareEditor({
           canPlace={Boolean(activeRecipient)}
           onPick={(t) => setActiveTool((cur) => (cur === t ? null : t))}
         />
+
+        {selectedField && (
+          <FieldSettings
+            field={selectedField}
+            groups={groups.filter(
+              (g) => g.recipientId === selectedField.recipientId,
+            )}
+            memberCountOf={(groupId) => membersOf(groupId).length}
+            disabled={busy}
+            onUpdateField={(patch) => updateField(selectedField.id, patch)}
+            onAssignGroup={(groupId) =>
+              assignFieldToGroup(selectedField.id, groupId)
+            }
+            onCreateGroup={() => createGroupFor(selectedField)}
+            onUpdateGroup={updateGroup}
+            onRemoveGroup={removeGroup}
+          />
+        )}
 
         <section className="rounded-xl border border-border bg-surface p-4">
           <label className="flex cursor-pointer items-start gap-3">
@@ -430,7 +599,13 @@ export function PrepareEditor({
                   recipients.find((r) => r.id === f.recipientId)?.name ||
                   "Recipient"
                 }
+                groupLabel={groupBadgeFor(f, groups)}
                 selected={selectedFieldId === f.id}
+                // Selecting one member outlines the rest, so "which boxes are
+                // in this group" is answerable with a click.
+                inSelectedGroup={Boolean(
+                  selectedField?.groupId && f.groupId === selectedField.groupId,
+                )}
                 onSelect={() => setSelectedFieldId(f.id)}
                 onChange={(patch) => updateField(f.id, patch)}
                 onRemove={() => removeField(f.id)}
@@ -697,6 +872,247 @@ function FieldPalette({
 }
 
 /* -------------------------------------------------------------------------- */
+/* Field settings (shown for the selected field)                              */
+/* -------------------------------------------------------------------------- */
+
+const selectClasses =
+  "h-9 w-full rounded-lg border border-input-border bg-input px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50";
+
+function FieldSettings({
+  field,
+  groups,
+  memberCountOf,
+  disabled,
+  onUpdateField,
+  onAssignGroup,
+  onCreateGroup,
+  onUpdateGroup,
+  onRemoveGroup,
+}: {
+  field: EditorField;
+  /** Groups belonging to this field's recipient — the only joinable ones. */
+  groups: EditorGroup[];
+  memberCountOf: (groupId: string) => number;
+  disabled: boolean;
+  onUpdateField: (patch: Partial<Omit<EditorField, "id">>) => void;
+  onAssignGroup: (groupId: string | null) => void;
+  onCreateGroup: () => void;
+  onUpdateGroup: (
+    id: string,
+    patch: Partial<Omit<EditorGroup, "id" | "recipientId">>,
+  ) => void;
+  onRemoveGroup: (id: string) => void;
+}) {
+  const group = groups.find((g) => g.id === field.groupId) ?? null;
+  const isCheckbox = field.type === "checkbox";
+
+  return (
+    <section className="rounded-xl border border-border bg-surface">
+      <div className="border-b border-border px-4 py-3">
+        <h2 className="text-sm font-semibold text-foreground">
+          {FIELD_TYPE_META.find((m) => m.type === field.type)?.label ?? "Field"}{" "}
+          settings
+        </h2>
+      </div>
+
+      <div className="flex flex-col gap-4 p-4">
+        {/* A grouped checkbox has no requirement of its own — its group's rule
+            is the requirement, so offering both would let them contradict. */}
+        {group ? (
+          <p className="text-xs text-muted-foreground">
+            This checkbox is one option in a group. The group&apos;s rule decides
+            what the signer must do.
+          </p>
+        ) : (
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              checked={field.required}
+              disabled={disabled}
+              onChange={(e) => onUpdateField({ required: e.target.checked })}
+              className="mt-0.5 size-4 rounded border-input-border text-primary focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <span>
+              <span className="block text-sm font-medium text-foreground">
+                Required
+              </span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                {isCheckbox
+                  ? "The signer must tick this box to continue."
+                  : "The signer must fill this in to continue."}
+              </span>
+            </span>
+          </label>
+        )}
+
+        {isCheckbox && (
+          <div className="flex flex-col gap-2 border-t border-border pt-4">
+            <Label htmlFor={`fld-group-${field.id}`}>Choice group</Label>
+            <p className="-mt-1 text-xs text-muted-foreground">
+              Group boxes the signer picks between, instead of making each one
+              mandatory on its own.
+            </p>
+            <select
+              id={`fld-group-${field.id}`}
+              className={selectClasses}
+              disabled={disabled}
+              value={group ? group.id : "none"}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "new") onCreateGroup();
+                else onAssignGroup(value === "none" ? null : value);
+              }}
+            >
+              <option value="none">No group — stands alone</option>
+              {groups.map((g, i) => (
+                <option key={g.id} value={g.id}>
+                  {g.label.trim() || `Group ${i + 1}`} ({memberCountOf(g.id)})
+                </option>
+              ))}
+              <option value="new">+ New group…</option>
+            </select>
+
+            {group && (
+              <GroupSettings
+                group={group}
+                memberCount={memberCountOf(group.id)}
+                disabled={disabled}
+                onUpdate={(patch) => onUpdateGroup(group.id, patch)}
+                onRemove={() => onRemoveGroup(group.id)}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function GroupSettings({
+  group,
+  memberCount,
+  disabled,
+  onUpdate,
+  onRemove,
+}: {
+  group: EditorGroup;
+  memberCount: number;
+  disabled: boolean;
+  onUpdate: (patch: Partial<Omit<EditorGroup, "id" | "recipientId">>) => void;
+  onRemove: () => void;
+}) {
+  const preset = presetFor(group);
+  const problem = groupRuleProblem(group, memberCount);
+
+  return (
+    <div className="mt-2 flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-3">
+      <div>
+        <Label htmlFor={`grp-label-${group.id}`}>Group name</Label>
+        <Input
+          id={`grp-label-${group.id}`}
+          value={group.label}
+          placeholder="e.g. Promotion methods"
+          disabled={disabled}
+          onChange={(e) => onUpdate({ label: e.target.value })}
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          Shown to the signer above the group. Optional.
+        </p>
+      </div>
+
+      <div>
+        <Label htmlFor={`grp-rule-${group.id}`}>The signer must</Label>
+        <select
+          id={`grp-rule-${group.id}`}
+          className={selectClasses}
+          disabled={disabled}
+          value={preset}
+          onChange={(e) => {
+            const value = e.target.value as RulePreset;
+            const match = RULE_PRESETS.find((p) => p.value === value);
+            // "Custom" opens the fields on the rule already in effect rather
+            // than resetting it, so switching to it never loses the sender's
+            // current numbers.
+            if (match) onUpdate(match.rule);
+            else onUpdate({ maxSelected: group.maxSelected ?? memberCount });
+          }}
+        >
+          <option value="one">Choose exactly one (like a radio button)</option>
+          <option value="atLeastOne">Choose at least one</option>
+          <option value="any">Choose any, or none (optional)</option>
+          <option value="custom">Custom…</option>
+        </select>
+      </div>
+
+      {preset === "custom" && (
+        <div className="flex items-end gap-2">
+          <div className="flex-1">
+            <Label htmlFor={`grp-min-${group.id}`}>Min</Label>
+            <Input
+              id={`grp-min-${group.id}`}
+              type="number"
+              min={0}
+              max={memberCount}
+              value={group.minSelected}
+              disabled={disabled}
+              onChange={(e) =>
+                onUpdate({ minSelected: clampInt(e.target.value, 0) })
+              }
+            />
+          </div>
+          <div className="flex-1">
+            <Label htmlFor={`grp-max-${group.id}`}>Max</Label>
+            <Input
+              id={`grp-max-${group.id}`}
+              type="number"
+              min={1}
+              max={memberCount}
+              placeholder="No limit"
+              value={group.maxSelected ?? ""}
+              disabled={disabled}
+              onChange={(e) =>
+                onUpdate({
+                  maxSelected:
+                    e.target.value === "" ? null : clampInt(e.target.value, 1),
+                })
+              }
+            />
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        {memberCount} {memberCount === 1 ? "checkbox" : "checkboxes"} in this
+        group · Signer sees “{groupRuleLabel(group)}”
+      </p>
+
+      {problem && (
+        <p className="text-xs text-tone-danger" role="alert">
+          {problem}
+        </p>
+      )}
+
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={disabled}
+        onClick={onRemove}
+        className="self-start text-tone-danger hover:bg-tone-danger-soft hover:text-tone-danger"
+      >
+        Ungroup these checkboxes
+      </Button>
+    </div>
+  );
+}
+
+/** Parse a number input, floored at `min`. Blank / garbage falls back to `min`. */
+function clampInt(raw: string, min: number): number {
+  const n = Number.parseInt(raw, 10);
+  if (!Number.isFinite(n)) return min;
+  return Math.max(min, n);
+}
+
+/* -------------------------------------------------------------------------- */
 /* PDF canvas + pages                                                         */
 /* -------------------------------------------------------------------------- */
 
@@ -877,7 +1293,9 @@ function FieldBox({
   field,
   colorBase,
   recipientLabel,
+  groupLabel,
   selected,
+  inSelectedGroup,
   onSelect,
   onChange,
   onRemove,
@@ -885,7 +1303,11 @@ function FieldBox({
   field: EditorField;
   colorBase: string;
   recipientLabel: string;
+  /** Set when this checkbox belongs to a choice group. */
+  groupLabel: string | null;
   selected: boolean;
+  /** This box shares a group with the currently selected one. */
+  inSelectedGroup: boolean;
   onSelect: () => void;
   onChange: (patch: Partial<Omit<EditorField, "id">>) => void;
   onRemove: () => void;
@@ -979,7 +1401,11 @@ function FieldBox({
       ref={elRef}
       role="button"
       tabIndex={0}
-      aria-label={`${field.type} field for ${recipientLabel}`}
+      aria-label={
+        groupLabel
+          ? `${field.type} field for ${recipientLabel}, in group ${groupLabel}`
+          : `${field.type} field for ${recipientLabel}`
+      }
       onPointerDown={(e) => beginDrag("move", e)}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
@@ -993,9 +1419,22 @@ function FieldBox({
       className={cn(
         "group flex cursor-move items-center justify-center overflow-visible rounded-[3px] border-2 text-[10px] font-medium leading-none select-none",
         selected ? "z-20 shadow-sm" : "z-10",
+        inSelectedGroup && !selected && "ring-2 ring-offset-1",
       )}
-      style={style}
+      style={
+        inSelectedGroup && !selected
+          ? { ...style, "--tw-ring-color": colorBase } as React.CSSProperties
+          : style
+      }
     >
+      {groupLabel && selected && (
+        <span
+          className="pointer-events-none absolute -top-1.5 left-0 max-w-[160px] -translate-y-full truncate rounded-full px-1.5 py-0.5 text-[9px] font-semibold whitespace-nowrap text-white"
+          style={{ backgroundColor: colorBase }}
+        >
+          {groupLabel}
+        </span>
+      )}
       <span className="pointer-events-none flex items-center gap-1 px-1">
         <svg
           width="11"

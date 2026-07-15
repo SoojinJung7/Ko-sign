@@ -2,12 +2,16 @@ import type { Metadata } from "next";
 import { asc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { fields as fieldsTable, recipients } from "@/db/schema";
+import {
+  fieldGroups as fieldGroupsTable,
+  fields as fieldsTable,
+  recipients,
+} from "@/db/schema";
 import { getPdfBytes } from "@/lib/blob";
 import { logAudit } from "@/lib/audit";
 import { Logo } from "@/components/brand/Logo";
 import { SignerApp } from "@/components/sign/SignerApp";
-import type { SignerField } from "@/components/sign/types";
+import type { SignerField, SignerGroup } from "@/components/sign/types";
 import {
   hasEarlierPendingSigner,
   loadSignerByToken,
@@ -175,6 +179,19 @@ export default async function SignPage({
     width: f.width,
     height: f.height,
     required: f.required,
+    groupId: f.groupId,
+  }));
+
+  const groupRows = await db
+    .select()
+    .from(fieldGroupsTable)
+    .where(eq(fieldGroupsTable.recipientId, recipient.id));
+
+  const signerGroups: SignerGroup[] = groupRows.map((g) => ({
+    id: g.id,
+    label: g.label,
+    minSelected: g.minSelected,
+    maxSelected: g.maxSelected,
   }));
 
   let pdfBase64: string;
@@ -213,6 +230,7 @@ export default async function SignPage({
       }}
       recipient={{ name: recipient.name, email: recipient.email }}
       fields={signerFields}
+      groups={signerGroups}
       pdfBase64={pdfBase64}
     />
   );

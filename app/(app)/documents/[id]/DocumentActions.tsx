@@ -4,7 +4,11 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Alert, Button, Dialog } from "@/components/ui";
-import { resendToRecipient, voidEnvelope } from "../actions";
+import {
+  resendToRecipient,
+  retryEnvelopeAdvance,
+  voidEnvelope,
+} from "../actions";
 
 /* -------------------------------------------------------------------------- */
 /* Void control (with confirmation)                                           */
@@ -61,6 +65,52 @@ export function VoidEnvelopeButton({ documentId }: { documentId: string }) {
         )}
       </Dialog>
     </>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* Stuck-envelope recovery                                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Shown only when every signer has signed but the envelope never reached
+ * `completed` — i.e. finalization failed after the last signature was recorded.
+ */
+export function FinishProcessingBanner({ documentId }: { documentId: string }) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  function retry() {
+    setError(null);
+    startTransition(async () => {
+      const result = await retryEnvelopeAdvance(documentId);
+      if (result.ok) router.refresh();
+      else setError(result.error);
+    });
+  }
+
+  return (
+    <Alert variant="warn" title="This envelope needs one more step" className="mt-6">
+      <p>
+        Everyone has signed, but we couldn&apos;t assemble the final PDF and
+        certificate. The signatures are safely recorded — retry to finish.
+      </p>
+      {error && (
+        <p className="mt-2 text-tone-danger" role="alert">
+          {error}
+        </p>
+      )}
+      <Button
+        size="sm"
+        variant="secondary"
+        className="mt-3"
+        loading={pending}
+        onClick={retry}
+      >
+        Finish processing
+      </Button>
+    </Alert>
   );
 }
 

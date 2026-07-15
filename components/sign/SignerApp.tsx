@@ -1,17 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Alert, Button, Dialog, Textarea } from "@/components/ui";
 import { Logo } from "@/components/brand/Logo";
+import { groupRuleLabel } from "@/lib/types";
 import { cn } from "@/lib/ui";
 import { DocumentViewer } from "./DocumentViewer";
 import { SignaturePad } from "./SignaturePad";
 import { OtpGate } from "./OtpGate";
+import {
+  buildRequirements,
+  fieldHasValue,
+  isChecked,
+  requirementDone,
+  requirementIsRequired,
+} from "./requirements";
 import type {
   FieldValue,
   SignerDocInfo,
   SignerField,
+  SignerGroup,
   SignerRecipientInfo,
 } from "./types";
 
@@ -21,6 +30,7 @@ export interface SignerAppProps {
   recipient: SignerRecipientInfo;
   role: "signer" | "viewer";
   fields: SignerField[];
+  groups: SignerGroup[];
   pdfBase64: string;
   /** Show the OTP gate before signing. */
   needsOtp: boolean;
@@ -28,25 +38,13 @@ export interface SignerAppProps {
 
 type Phase = "otp" | "work" | "done" | "declined";
 
-function fieldHasValue(field: SignerField, value: FieldValue | undefined): boolean {
-  if (!value) return false;
-  switch (field.type) {
-    case "signature":
-    case "initials":
-      return Boolean(value.imageData || (value.value && value.value.trim()));
-    case "checkbox":
-      return (value.value ?? "").toLowerCase() === "true";
-    default:
-      return Boolean(value.value && value.value.trim());
-  }
-}
-
 export function SignerApp({
   token,
   doc,
   recipient,
   role,
   fields,
+  groups,
   pdfBase64,
   needsOtp,
 }: SignerAppProps) {
@@ -65,15 +63,33 @@ export function SignerApp({
   const [declining, setDeclining] = useState(false);
   const [declineError, setDeclineError] = useState<string | null>(null);
 
-  const requiredFields = useMemo(
-    () => fields.filter((f) => f.required),
-    [fields],
+  /** Transient nudge for a rule the signer just bumped into (e.g. a full group). */
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const groupById = useMemo(
+    () => new Map(groups.map((g) => [g.id, g])),
+    [groups],
   );
-  const completedRequired = requiredFields.filter((f) =>
-    fieldHasValue(f, values[f.id]),
+  const requirements = useMemo(
+    () => buildRequirements(fields, groups),
+    [fields, groups],
+  );
+  const required = useMemo(
+    () => requirements.filter(requirementIsRequired),
+    [requirements],
+  );
+
+  const completedRequired = required.filter((r) =>
+    requirementDone(r, values),
   ).length;
   const allRequiredDone =
-    requiredFields.length === 0 || completedRequired === requiredFields.length;
+    required.length === 0 || completedRequired === required.length;
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(t);
+  }, [notice]);
 
   function setFieldValue(fieldId: string, value: FieldValue | null) {
     setSubmitError(null);
@@ -87,13 +103,67 @@ export function SignerApp({
     });
   }
 
+  /**
+   * Toggle a checkbox, honoring its group's ceiling. A group capped at one
+   * behaves like a radio: picking a new box releases the old one, since that is
+   * what "choose one" means to everyone who has ever filled in a form. A higher
+   * cap can't guess which box to drop, so it refuses and says why.
+   */
+  function toggleCheckbox(field: SignerField) {
+    setNotice(null);
+    const checked = isChecked(values[field.id]);
+    const group = field.groupId ? groupById.get(field.groupId) : undefined;
+
+    if (!group || checked) {
+      setFieldValue(field.id, checked ? null : { value: "true" });
+      return;
+    }
+
+    const max = group.maxSelected;
+    if (max === null) {
+      setFieldValue(field.id, { value: "true" });
+      return;
+    }
+
+    const members = fields.filter((f) => f.groupId === group.id);
+    const chosen = members.filter((m) => isChecked(values[m.id]));
+    if (chosen.length < max) {
+      setFieldValue(field.id, { value: "true" });
+      return;
+    }
+
+    if (max === 1) {
+      setSubmitError(null);
+      setValues((prev) => {
+        const next = { ...prev };
+        for (const m of chosen) delete next[m.id];
+        next[field.id] = { value: "true" };
+        return next;
+      });
+      return;
+    }
+
+    setNotice(
+      `${group.label ? `“${group.label}”: ` : ""}you can choose up to ${max}. Uncheck one first.`,
+    );
+  }
+
   function jumpToNext() {
-    const next = fields.find((f) => f.required && !fieldHasValue(f, values[f.id]));
+    const next = required.find((r) => !requirementDone(r, values));
     if (!next) return;
-    const el = document.getElementById(`sign-field-${next.id}`);
+    const target =
+      next.kind === "field" ? next.field : (next.members[0] ?? null);
+    if (!target) return;
+    const el = document.getElementById(`sign-field-${target.id}`);
     el?.scrollIntoView({ behavior: "smooth", block: "center" });
-    if (next.type === "signature" || next.type === "initials") {
-      setTimeout(() => setActiveField(next), 350);
+    if (next.kind === "group") {
+      setNotice(
+        `${next.group.label ? `“${next.group.label}”: ` : ""}${groupRuleLabel(next.group).toLowerCase()}.`,
+      );
+      return;
+    }
+    if (target.type === "signature" || target.type === "initials") {
+      setTimeout(() => setActiveField(target), 350);
     } else {
       (el?.querySelector("input") as HTMLElement | null)?.focus();
     }
@@ -256,9 +326,11 @@ export function SignerApp({
           pdfBase64={pdfBase64}
           pageCount={doc.pageCount}
           fields={fields}
+          groups={groups}
           values={values}
           interactive={canSign}
           onChange={setFieldValue}
+          onToggleCheckbox={toggleCheckbox}
           onOpenSignature={(f) => setActiveField(f)}
         />
       </div>
@@ -268,17 +340,26 @@ export function SignerApp({
         <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-surface/90 backdrop-blur">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <div className="flex items-center gap-3">
-              <ProgressRing done={completedRequired} total={requiredFields.length} />
+              <ProgressRing done={completedRequired} total={required.length} />
               <div className="text-sm">
                 <p className="font-medium text-foreground">
                   {allRequiredDone
                     ? "All required fields complete"
-                    : `${completedRequired} of ${requiredFields.length} required fields`}
+                    : `${completedRequired} of ${required.length} required ${
+                        required.length === 1 ? "step" : "steps"
+                      }`}
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {allRequiredDone
-                    ? "Review, then finish signing."
-                    : "Fill every highlighted field to continue."}
+                <p
+                  className={cn(
+                    "text-xs",
+                    notice ? "text-tone-warning" : "text-muted-foreground",
+                  )}
+                  role={notice ? "status" : undefined}
+                >
+                  {notice ??
+                    (allRequiredDone
+                      ? "Review, then finish signing."
+                      : "Complete every highlighted field to continue.")}
                 </p>
               </div>
             </div>
@@ -292,7 +373,7 @@ export function SignerApp({
                 size="lg"
                 loading={submitting}
                 onClick={submit}
-                disabled={!allRequiredDone && requiredFields.length > 0}
+                disabled={!allRequiredDone && required.length > 0}
               >
                 Finish signing
               </Button>

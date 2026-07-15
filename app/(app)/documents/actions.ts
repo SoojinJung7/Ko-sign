@@ -8,7 +8,7 @@ import { documents, recipients } from "@/db/schema";
 import { getCurrentUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { sendSigningInvite } from "@/lib/email";
-import { recipientSignUrl } from "@/lib/envelope";
+import { notifyNextOrFinalize, recipientSignUrl } from "@/lib/envelope";
 
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
@@ -38,6 +38,52 @@ export async function voidEnvelope(documentId: string): Promise<ActionResult> {
     .where(eq(documents.id, documentId));
 
   await logAudit({ documentId, type: "voided" });
+
+  revalidatePath(`/documents/${documentId}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
+/**
+ * Retry advancing an in-progress envelope — notify the next signer, or finalize
+ * it if everyone has signed.
+ *
+ * Signing commits the signature first and advances the envelope second, so a
+ * failure in the second half (a PDF that won't stamp, blob storage down, an
+ * email that bounces) leaves the envelope stranded at `sent` with nothing the
+ * signer can do: they cannot sign twice. This lets the owner drive the retry
+ * once the cause is gone. `notifyNextOrFinalize` re-derives everything it needs
+ * from the recipients' current state, so calling it again is safe.
+ */
+export async function retryEnvelopeAdvance(
+  documentId: string,
+): Promise<ActionResult> {
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "You are not signed in." };
+
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.id, documentId), eq(documents.userId, user.id)))
+    .limit(1);
+
+  if (!doc) return { ok: false, error: "Envelope not found." };
+  if (doc.status !== "sent") {
+    return { ok: false, error: "This envelope is not in progress." };
+  }
+
+  try {
+    await notifyNextOrFinalize(documentId);
+  } catch (err) {
+    console.error(`[retryEnvelopeAdvance] ${documentId} failed:`, err);
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? `Still couldn't finish this envelope: ${err.message}`
+          : "Still couldn't finish this envelope.",
+    };
+  }
 
   revalidatePath(`/documents/${documentId}`);
   revalidatePath("/dashboard");

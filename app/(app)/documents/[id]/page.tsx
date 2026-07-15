@@ -11,7 +11,11 @@ import { RECIPIENT_STATUS_LABEL } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle, StatusBadge } from "@/components/ui";
 import { AuditTrail } from "@/components/audit/AuditTrail";
 
-import { ResendButton, VoidEnvelopeButton } from "./DocumentActions";
+import {
+  FinishProcessingBanner,
+  ResendButton,
+  VoidEnvelopeButton,
+} from "./DocumentActions";
 
 export const runtime = "nodejs";
 
@@ -66,6 +70,15 @@ export default async function DocumentDetailPage({
   const auditTrail = await getAuditTrail(doc.id);
 
   const canResend = doc.status === "sent";
+
+  // An in-progress envelope whose signers are all done should have finalized
+  // itself. If it hasn't, finalization failed after the last signature landed
+  // and only the owner can drive the retry.
+  const signers = docRecipients.filter((r) => r.role === "signer");
+  const stalled =
+    doc.status === "sent" &&
+    signers.length > 0 &&
+    signers.every((r) => r.status === "signed");
 
   return (
     <div className="mx-auto w-full max-w-4xl px-5 py-8 sm:px-8 sm:py-10">
@@ -140,6 +153,8 @@ export default async function DocumentDetailPage({
           {doc.status === "sent" && <VoidEnvelopeButton documentId={doc.id} />}
         </div>
       </header>
+
+      {stalled && <FinishProcessingBanner documentId={doc.id} />}
 
       {/* Message */}
       {doc.message && (
