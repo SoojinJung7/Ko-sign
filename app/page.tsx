@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { Logo } from "@/components/brand/Logo";
+import { LanguageToggle } from "@/components/brand/LanguageToggle";
 import { getDictionary } from "@/lib/i18n/server";
 
 export async function generateMetadata() {
@@ -110,6 +111,7 @@ async function SiteHeader() {
           </a>
         </nav>
         <div className="flex items-center gap-2 sm:gap-3">
+          <LanguageToggle variant="inline" />
           <Link
             href="/login"
             className="hidden h-9 items-center rounded-lg px-3 text-sm font-medium text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring sm:inline-flex"

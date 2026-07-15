@@ -50,7 +50,7 @@ function shell(bodyInner: string, locale: Locale): string {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e6e6ef;">
             <tr>
               <td style="padding:28px 32px 8px;">
-                <span style="display:inline-block;font-size:18px;font-weight:700;letter-spacing:-0.02em;color:#4f46e5;">${BRAND}</span>
+                <span style="display:inline-block;font-size:18px;font-weight:700;letter-spacing:-0.02em;color:#0d9488;">${BRAND}</span>
               </td>
             </tr>
             <tr>
@@ -76,7 +76,7 @@ function buttonEmail(opts: ButtonEmailOptions): string {
     <p style="margin:0 0 24px;font-size:15px;line-height:1.6;color:#4a4a5e;">${opts.intro}</p>
     <table role="presentation" cellpadding="0" cellspacing="0">
       <tr>
-        <td style="border-radius:10px;background:#4f46e5;">
+        <td style="border-radius:10px;background:#0d9488;">
           <a href="${opts.ctaUrl}" style="display:inline-block;padding:12px 28px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">${opts.ctaLabel}</a>
         </td>
       </tr>
@@ -84,7 +84,7 @@ function buttonEmail(opts: ButtonEmailOptions): string {
     ${opts.outro ? `<p style="margin:24px 0 0;font-size:15px;line-height:1.6;color:#4a4a5e;">${opts.outro}</p>` : ""}
     <p style="margin:24px 0 0;font-size:13px;line-height:1.6;color:#8a8aa0;">
       ${t.buttonFallback}<br />
-      <a href="${opts.ctaUrl}" style="color:#4f46e5;word-break:break-all;">${opts.ctaUrl}</a>
+      <a href="${opts.ctaUrl}" style="color:#0d9488;word-break:break-all;">${opts.ctaUrl}</a>
     </p>
     ${opts.footnote ? `<p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#a0a0b4;">${opts.footnote}</p>` : ""}
   `, opts.locale);

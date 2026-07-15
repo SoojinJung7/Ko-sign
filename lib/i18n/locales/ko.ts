@@ -115,7 +115,7 @@ export const ko: typeof en = {
     finalCta: "무료로 시작하기",
     footerTagline: "모든 문서에 위변조 방지 감사 추적을 남기는, 법적 효력을 갖춘 서명을 받는 가장 안전하고 스마트한 방법.",
     footerNavLabel: "바닥글",
-    footerRights: "Ko-sign. 모든 권리 보유.",
+    footerRights: "Electree-Korea Co., Ltd. 모든 권리 보유.",
     footerSecured: "SHA-256 및 SMS 인증으로 보호됨",
   },
   // Sign-in flow

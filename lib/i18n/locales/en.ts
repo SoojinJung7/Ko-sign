@@ -113,7 +113,7 @@ export const en = {
     finalCta: "Get started free",
     footerTagline: "The modern, secure way to collect legally-sound signatures — with a tamper-evident audit trail on every document.",
     footerNavLabel: "Footer",
-    footerRights: "Ko-sign. All rights reserved.",
+    footerRights: "Electree-Korea Co., Ltd. All rights reserved.",
     footerSecured: "Secured with SHA-256 & SMS verification",
   },
   // Sign-in flow
