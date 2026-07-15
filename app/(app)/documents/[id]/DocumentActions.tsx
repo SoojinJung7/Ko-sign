@@ -79,6 +79,7 @@ export function VoidEnvelopeButton({ documentId }: { documentId: string }) {
  * `completed` — i.e. finalization failed after the last signature was recorded.
  */
 export function FinishProcessingBanner({ documentId }: { documentId: string }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -93,11 +94,8 @@ export function FinishProcessingBanner({ documentId }: { documentId: string }) {
   }
 
   return (
-    <Alert variant="warn" title="This envelope needs one more step" className="mt-6">
-      <p>
-        Everyone has signed, but we couldn&apos;t assemble the final PDF and
-        certificate. The signatures are safely recorded — retry to finish.
-      </p>
+    <Alert variant="warn" title={t.sender.stalledTitle} className="mt-6">
+      <p>{t.sender.stalledBody}</p>
       {error && (
         <p className="mt-2 text-tone-danger" role="alert">
           {error}
@@ -110,7 +108,7 @@ export function FinishProcessingBanner({ documentId }: { documentId: string }) {
         loading={pending}
         onClick={retry}
       >
-        Finish processing
+        {t.sender.stalledCta}
       </Button>
     </Alert>
   );

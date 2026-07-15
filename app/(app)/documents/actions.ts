@@ -63,8 +63,9 @@ export async function voidEnvelope(documentId: string): Promise<ActionResult> {
 export async function retryEnvelopeAdvance(
   documentId: string,
 ): Promise<ActionResult> {
+  const t = await getDictionary();
   const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "You are not signed in." };
+  if (!user) return { ok: false, error: t.sender.notSignedIn };
 
   const [doc] = await db
     .select()
@@ -72,21 +73,23 @@ export async function retryEnvelopeAdvance(
     .where(and(eq(documents.id, documentId), eq(documents.userId, user.id)))
     .limit(1);
 
-  if (!doc) return { ok: false, error: "Envelope not found." };
+  if (!doc) return { ok: false, error: t.sender.envelopeNotFound };
   if (doc.status !== "sent") {
-    return { ok: false, error: "This envelope is not in progress." };
+    return { ok: false, error: t.sender.envelopeNotInProgress };
   }
 
   try {
-    await notifyNextOrFinalize(documentId);
+    await notifyNextOrFinalize(documentId, await getLocale());
   } catch (err) {
     console.error(`[retryEnvelopeAdvance] ${documentId} failed:`, err);
     return {
       ok: false,
+      // Surface the underlying reason: the owner is the only one who can act
+      // on "blob storage rejected it" vs "that PDF won't stamp".
       error:
         err instanceof Error
-          ? `Still couldn't finish this envelope: ${err.message}`
-          : "Still couldn't finish this envelope.",
+          ? `${t.sender.stalledRetryFailedPrefix}${err.message}`
+          : t.sender.stalledRetryFailed,
     };
   }
 
