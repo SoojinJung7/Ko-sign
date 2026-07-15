@@ -4,6 +4,18 @@ import { useRouter } from "next/navigation";
 import { useI18n } from "@/lib/i18n/provider";
 import { LOCALES, type Locale } from "@/lib/i18n/config";
 
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+/**
+ * Persist the choice for a year. Kept at module scope: writing to `document`
+ * from inside the component reads as mutating an outer value to the compiler's
+ * immutability rule, even though a cookie write in an event handler is exactly
+ * where this belongs.
+ */
+function persistLocale(locale: Locale): void {
+  document.cookie = `locale=${locale};path=/;max-age=${COOKIE_MAX_AGE};samesite=lax`;
+}
+
 /**
  * Small fixed pill at the bottom-right that switches the UI language.
  * Persists the choice in a `locale` cookie and refreshes RSC to re-render
@@ -15,7 +27,7 @@ export function LanguageToggle() {
 
   function setLocale(l: Locale) {
     if (l === locale) return;
-    document.cookie = `locale=${l};path=/;max-age=31536000;samesite=lax`;
+    persistLocale(l);
     router.refresh();
   }
 
