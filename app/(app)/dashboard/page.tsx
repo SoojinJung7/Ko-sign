@@ -5,9 +5,9 @@ import { desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, recipients } from "@/db/schema";
 import { requireUser } from "@/lib/session";
+import { getDictionary } from "@/lib/i18n/server";
 import { cn } from "@/lib/ui";
 import {
-  DOC_STATUS_LABEL,
   DOC_STATUS_TONE,
   DOC_STATUSES,
   type BadgeTone,
@@ -17,9 +17,10 @@ import { EmptyState, StatusBadge } from "@/components/ui";
 
 export const runtime = "nodejs";
 
-export const metadata: Metadata = {
-  title: "Dashboard",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return { title: t.sender.dashboardTitle };
+}
 
 const dateFmt = new Intl.DateTimeFormat("en-US", {
   month: "short",
@@ -56,6 +57,7 @@ const PlusIcon = (
 
 export default async function DashboardPage() {
   const user = await requireUser();
+  const t = await getDictionary();
 
   const docs = await db
     .select()
@@ -97,17 +99,17 @@ export default async function DashboardPage() {
       <header className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-            Envelopes
+            {t.sender.envelopesHeading}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {docs.length === 0
-              ? "You haven't created any envelopes yet."
-              : `${docs.length} ${docs.length === 1 ? "envelope" : "envelopes"} total`}
+              ? t.sender.noEnvelopesYet
+              : `${docs.length}${docs.length === 1 ? t.sender.totalSuffixOne : t.sender.totalSuffixOther}`}
           </p>
         </div>
         <Link href="/documents/new" className={newEnvelopeCta}>
           {PlusIcon}
-          New envelope
+          {t.sender.newEnvelope}
         </Link>
       </header>
 
@@ -129,7 +131,7 @@ export default async function DashboardPage() {
                     )}
                     aria-hidden="true"
                   />
-                  {DOC_STATUS_LABEL[status]}
+                  {t.status.doc[status]}
                 </dt>
                 <dd className="mt-1.5 text-2xl font-semibold tabular-nums text-foreground">
                   {statusCounts[status]}
@@ -144,12 +146,12 @@ export default async function DashboardPage() {
       <section className="mt-8">
         {docs.length === 0 ? (
           <EmptyState
-            title="No envelopes yet"
-            description="Upload a PDF, place your fields, and send it out for signature. Your envelopes will appear here."
+            title={t.sender.emptyTitle}
+            description={t.sender.emptyDescription}
             action={
               <Link href="/documents/new" className={newEnvelopeCta}>
                 {PlusIcon}
-                Create your first envelope
+                {t.sender.createFirstEnvelope}
               </Link>
             }
           />
@@ -188,15 +190,21 @@ export default async function DashboardPage() {
                       </p>
                       <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
                         <span>
-                          {count} {count === 1 ? "recipient" : "recipients"}
+                          {count}
+                          {count === 1
+                            ? t.sender.recipientSuffixOne
+                            : t.sender.recipientSuffixOther}
                         </span>
                         <span aria-hidden="true">·</span>
-                        <span>Created {dateFmt.format(doc.createdAt)}</span>
+                        <span>
+                          {t.sender.createdLabel} {dateFmt.format(doc.createdAt)}
+                        </span>
                       </p>
                     </div>
                     <StatusBadge
                       kind="document"
                       status={doc.status}
+                      label={t.status.doc[doc.status]}
                       className="shrink-0"
                     />
                     <svg

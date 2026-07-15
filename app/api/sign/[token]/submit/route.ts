@@ -13,7 +13,9 @@ import {
 import { newId } from "@/lib/crypto";
 import { logAudit } from "@/lib/audit";
 import { notifyNextOrFinalize } from "@/lib/envelope";
-import { groupRuleLabel, groupSatisfied } from "@/lib/types";
+import { en } from "@/lib/i18n/locales/en";
+import { getLocale } from "@/lib/i18n/server";
+import { formatGroupRule, groupSatisfied } from "@/lib/types";
 
 import {
   hasEarlierPendingSigner,
@@ -154,9 +156,11 @@ export async function POST(
       maxSelected: group.maxSelected,
     };
     if (!groupSatisfied(checked, rule)) {
+      // English like every other message from this API; the signer's UI states
+      // the rule in their language before they ever get here.
       const name = group.label ? `“${group.label}”` : "one of the checkbox groups";
       return jsonError(
-        `Please review ${name}: ${groupRuleLabel(rule).toLowerCase()}.`,
+        `Please review ${name}: ${formatGroupRule(rule, en.groupRule).toLowerCase()}.`,
         400,
       );
     }
@@ -227,7 +231,7 @@ export async function POST(
   // envelope would be stranded either way. Record the failure and let the owner
   // retry from the document page (see retryEnvelopeAdvance).
   try {
-    await notifyNextOrFinalize(document.id);
+    await notifyNextOrFinalize(document.id, await getLocale());
   } catch (err) {
     console.error(
       `[sign/submit] advancing envelope ${document.id} failed after ${recipient.id} signed:`,

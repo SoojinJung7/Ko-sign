@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { Alert, Button, Card, Spinner } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/ui";
 
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -15,6 +16,7 @@ function formatBytes(bytes: number): string {
 }
 
 export function Uploader() {
+  const { t } = useI18n();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -27,19 +29,19 @@ export function Uploader() {
     setError(null);
     if (!next) return;
     if (next.type !== "application/pdf" && !next.name.toLowerCase().endsWith(".pdf")) {
-      setError("Please choose a PDF file.");
+      setError(t.prepare.errorPdfOnly);
       return;
     }
     if (next.size === 0) {
-      setError("That file is empty.");
+      setError(t.prepare.errorEmptyFile);
       return;
     }
     if (next.size > MAX_BYTES) {
-      setError("That file is larger than the 25 MB limit.");
+      setError(t.prepare.errorTooLarge);
       return;
     }
     setFile(next);
-  }, []);
+  }, [t]);
 
   const onDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
@@ -63,19 +65,19 @@ export function Uploader() {
         | { ok: boolean; id?: string; error?: string }
         | null;
       if (!res.ok || !data?.ok || !data.id) {
-        throw new Error(data?.error ?? "Upload failed. Please try again.");
+        throw new Error(data?.error ?? t.prepare.uploadFailedRetry);
       }
       router.push(`/documents/${data.id}/prepare`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed.");
+      setError(err instanceof Error ? err.message : t.prepare.uploadFailed);
       setUploading(false);
     }
-  }, [file, uploading, router]);
+  }, [file, uploading, router, t]);
 
   return (
     <div className="flex flex-col gap-5">
       {error && (
-        <Alert variant="error" title="Couldn’t upload">
+        <Alert variant="error" title={t.prepare.uploadErrorTitle}>
           {error}
         </Alert>
       )}
@@ -84,7 +86,7 @@ export function Uploader() {
         <div
           role="button"
           tabIndex={0}
-          aria-label="Upload a PDF: drop a file here or press Enter to browse"
+          aria-label={t.prepare.dropzoneAria}
           onClick={() => !uploading && inputRef.current?.click()}
           onKeyDown={(e) => {
             if ((e.key === "Enter" || e.key === " ") && !uploading) {
@@ -134,14 +136,14 @@ export function Uploader() {
 
           <div>
             <p className="text-sm font-medium text-foreground">
-              {dragging ? "Drop to upload" : "Drag & drop a PDF here"}
+              {dragging ? t.prepare.dropToUpload : t.prepare.dragDrop}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              or{" "}
+              {t.prepare.orText}{" "}
               <span className="font-medium text-brand-600 dark:text-brand-300">
-                browse your files
+                {t.prepare.browseFiles}
               </span>{" "}
-              · up to 25 MB
+              {t.prepare.sizeLimit}
             </p>
           </div>
 
@@ -191,7 +193,7 @@ export function Uploader() {
                   if (inputRef.current) inputRef.current.value = "";
                 }}
               >
-                Remove
+                {t.prepare.remove}
               </Button>
             )}
           </div>
@@ -201,7 +203,7 @@ export function Uploader() {
       <div className="flex items-center justify-end gap-3">
         {uploading && (
           <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-            <Spinner size={16} /> Uploading…
+            <Spinner size={16} /> {t.prepare.uploading}
           </span>
         )}
         <Button
@@ -210,7 +212,7 @@ export function Uploader() {
           loading={uploading}
           size="lg"
         >
-          Continue to prepare
+          {t.prepare.continueToPrepare}
         </Button>
       </div>
     </div>

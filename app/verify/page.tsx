@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { getDictionary } from "@/lib/i18n/server";
 import { VerifyForm } from "@/components/verify/VerifyForm";
 
-export const metadata: Metadata = {
-  title: "Verify a document",
-  description:
-    "Confirm that a signed PDF is authentic and unaltered. Upload the file or paste its document ID to check it against Ko-sign's tamper-evident record.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return {
+    title: t.verify.metaTitle,
+    description: t.verify.metaDescription,
+  };
+}
 
 function TrustPoint({
   title,
@@ -34,7 +37,8 @@ function TrustPoint({
   );
 }
 
-export default function VerifyPage() {
+export default async function VerifyPage() {
+  const t = await getDictionary();
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col px-5 py-10 sm:px-8 sm:py-16">
       <header className="mb-10">
@@ -69,21 +73,19 @@ export default function VerifyPage() {
                 strokeLinejoin="round"
               />
             </svg>
-            Independent verification
+            {t.verify.badgeIndependent}
           </span>
 
           <h1 className="mt-4 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-            Verify a signed document
+            {t.verify.heading}
           </h1>
           <p className="mt-3 text-base leading-relaxed text-muted-foreground">
-            Every document completed on Ko-sign is sealed with a SHA-256
-            fingerprint. Upload the PDF or paste its document ID to confirm it is
-            authentic and has not been altered since signing.
+            {t.verify.intro}
           </p>
 
           <div className="mt-8 space-y-5">
             <TrustPoint
-              title="Cryptographic proof"
+              title={t.verify.point.cryptoTitle}
               icon={
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <rect x="5" y="11" width="14" height="9" rx="2" />
@@ -91,11 +93,10 @@ export default function VerifyPage() {
                 </svg>
               }
             >
-              We compare the file&apos;s exact SHA-256 hash to the one recorded
-              at completion. A single changed byte breaks the match.
+              {t.verify.point.cryptoBody}
             </TrustPoint>
             <TrustPoint
-              title="Nothing is uploaded"
+              title={t.verify.point.uploadTitle}
               icon={
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <circle cx="12" cy="12" r="9" />
@@ -103,11 +104,10 @@ export default function VerifyPage() {
                 </svg>
               }
             >
-              Your PDF is hashed to check it — the file itself is never stored on
-              our servers.
+              {t.verify.point.uploadBody}
             </TrustPoint>
             <TrustPoint
-              title="Full signer record"
+              title={t.verify.point.signerTitle}
               icon={
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                   <path d="M4 20a6 6 0 0 1 12 0" strokeLinecap="round" />
@@ -116,8 +116,7 @@ export default function VerifyPage() {
                 </svg>
               }
             >
-              An authentic result shows the document title, completion date, and
-              everyone who signed.
+              {t.verify.point.signerBody}
             </TrustPoint>
           </div>
         </section>
@@ -125,10 +124,10 @@ export default function VerifyPage() {
         {/* Right: verification widget */}
         <section className="rounded-2xl border border-border bg-card p-5 shadow-lg sm:p-7">
           <h2 className="text-lg font-semibold tracking-tight text-foreground">
-            Check a document
+            {t.verify.checkHeading}
           </h2>
           <p className="mb-5 mt-1 text-sm text-muted-foreground">
-            Choose how you&apos;d like to verify.
+            {t.verify.checkSubtitle}
           </p>
           <VerifyForm />
         </section>

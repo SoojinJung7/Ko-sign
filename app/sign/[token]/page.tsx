@@ -12,6 +12,7 @@ import { logAudit } from "@/lib/audit";
 import { Logo } from "@/components/brand/Logo";
 import { SignerApp } from "@/components/sign/SignerApp";
 import type { SignerField, SignerGroup } from "@/components/sign/types";
+import { getDictionary } from "@/lib/i18n/server";
 import {
   hasEarlierPendingSigner,
   loadSignerByToken,
@@ -20,10 +21,13 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: "Review & sign",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getDictionary();
+  return {
+    title: t.signer.metaTitle,
+    robots: { index: false, follow: false },
+  };
+}
 
 /**
  * Public, token-addressed signing page. Resolves the recipient behind a link,
@@ -36,13 +40,14 @@ export default async function SignPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
+  const t = await getDictionary();
   const signer = await loadSignerByToken(token);
 
   if (!signer) {
     return (
       <StatusScreen
         tone="neutral"
-        title="This signing link isn't valid"
+        title={t.signer.invalidLinkTitle}
         icon={
           <>
             <circle cx="12" cy="12" r="9" />
@@ -50,8 +55,7 @@ export default async function SignPage({
           </>
         }
       >
-        The link may be incomplete or expired. Please use the most recent link
-        from your email, or ask the sender to resend it.
+        {t.signer.invalidLinkBody}
       </StatusScreen>
     );
   }
@@ -63,11 +67,12 @@ export default async function SignPage({
     return (
       <StatusScreen
         tone="warning"
-        title="This document was voided"
+        title={t.signer.voidedTitle}
         icon={<><circle cx="12" cy="12" r="9" /><path d="m9 9 6 6M15 9l-6 6" /></>}
       >
-        The sender voided <Strong>{document.title}</Strong>, so it can no longer
-        be signed. Contact them if you think this is a mistake.
+        {t.signer.voidedBodyPrefix}
+        <Strong>{document.title}</Strong>
+        {t.signer.voidedBodySuffix}
       </StatusScreen>
     );
   }
@@ -76,14 +81,16 @@ export default async function SignPage({
     return (
       <StatusScreen
         tone="danger"
-        title="You declined this document"
+        title={t.signer.declinedYouTitle}
         icon={<><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></>}
       >
-        You previously declined to sign <Strong>{document.title}</Strong>.
+        {t.signer.declinedYouBodyPrefix}
+        <Strong>{document.title}</Strong>
+        {t.signer.declinedYouBodySuffix}
         {recipient.declinedReason ? (
           <>
             {" "}
-            Reason given:{" "}
+            {t.signer.reasonGivenLabel}{" "}
             <span className="italic">“{recipient.declinedReason}”</span>
           </>
         ) : null}
@@ -95,11 +102,11 @@ export default async function SignPage({
     return (
       <StatusScreen
         tone="danger"
-        title="This document was declined"
+        title={t.signer.docDeclinedTitle}
         icon={<><circle cx="12" cy="12" r="9" /><path d="M9 9l6 6M15 9l-6 6" /></>}
       >
-        <Strong>{document.title}</Strong> was declined and is no longer
-        available for signing.
+        <Strong>{document.title}</Strong>
+        {t.signer.docDeclinedBodySuffix}
       </StatusScreen>
     );
   }
@@ -108,12 +115,12 @@ export default async function SignPage({
     return (
       <StatusScreen
         tone="success"
-        title="You've already signed"
+        title={t.signer.alreadySignedTitle}
         icon={<path d="m5 13 4 4L19 7" />}
       >
-        Thanks — your signature on <Strong>{document.title}</Strong> is already
-        on file. Once everyone has signed, a completed copy will be emailed to
-        you.
+        {t.signer.alreadySignedBodyPrefix}
+        <Strong>{document.title}</Strong>
+        {t.signer.alreadySignedBodySuffix}
       </StatusScreen>
     );
   }
@@ -122,11 +129,11 @@ export default async function SignPage({
     return (
       <StatusScreen
         tone="success"
-        title="This document is complete"
+        title={t.signer.completeTitle}
         icon={<path d="m5 13 4 4L19 7" />}
       >
-        <Strong>{document.title}</Strong> has been completed. A copy with the
-        certificate of completion has been emailed to all parties.
+        <Strong>{document.title}</Strong>
+        {t.signer.completeBodySuffix}
       </StatusScreen>
     );
   }
@@ -139,12 +146,11 @@ export default async function SignPage({
     return (
       <StatusScreen
         tone="info"
-        title="Almost there — it's not your turn yet"
+        title={t.signer.notYourTurnTitle}
         icon={<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>}
       >
-        <Strong>{document.title}</Strong> is being signed in order, and another
-        signer needs to act before you. We&apos;ll email you the moment it&apos;s
-        your turn.
+        <Strong>{document.title}</Strong>
+        {t.signer.notYourTurnBodySuffix}
       </StatusScreen>
     );
   }
@@ -202,11 +208,10 @@ export default async function SignPage({
     return (
       <StatusScreen
         tone="danger"
-        title="We couldn't load this document"
+        title={t.signer.loadErrorTitle}
         icon={<><circle cx="12" cy="12" r="9" /><path d="M12 8v5M12 16h.01" /></>}
       >
-        The document file couldn&apos;t be read right now. Please try again in a
-        few minutes, or contact the sender.
+        {t.signer.loadErrorBody}
       </StatusScreen>
     );
   }

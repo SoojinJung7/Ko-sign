@@ -10,6 +10,7 @@ import {
 } from "@/db/schema";
 import { randomToken } from "@/lib/crypto";
 import { env } from "@/lib/env";
+import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { putPdf } from "@/lib/blob";
 import {
   sendCompletedNotice,
@@ -152,7 +153,10 @@ export async function sendEnvelope(documentId: string): Promise<void> {
  * signing order. Otherwise finalize the document: stamp + certificate, store to
  * blob, mark completed, and notify all parties.
  */
-export async function notifyNextOrFinalize(documentId: string): Promise<void> {
+export async function notifyNextOrFinalize(
+  documentId: string,
+  locale: Locale = DEFAULT_LOCALE,
+): Promise<void> {
   const [doc] = await db
     .select()
     .from(documents)
@@ -236,6 +240,7 @@ export async function notifyNextOrFinalize(documentId: string): Promise<void> {
       to,
       documentTitle: doc.title,
       downloadUrl,
+      locale,
     });
   };
 

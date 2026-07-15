@@ -6,6 +6,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { documents, recipients } from "@/db/schema";
 import { getCurrentUser } from "@/lib/session";
+import { getDictionary, getLocale } from "@/lib/i18n/server";
 import { logAudit } from "@/lib/audit";
 import { sendSigningInvite } from "@/lib/email";
 import { notifyNextOrFinalize, recipientSignUrl } from "@/lib/envelope";
@@ -18,8 +19,9 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
  * declined envelopes are terminal.
  */
 export async function voidEnvelope(documentId: string): Promise<ActionResult> {
+  const t = await getDictionary();
   const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "You are not signed in." };
+  if (!user) return { ok: false, error: t.sender.notSignedIn };
 
   const [doc] = await db
     .select()
@@ -27,9 +29,12 @@ export async function voidEnvelope(documentId: string): Promise<ActionResult> {
     .where(and(eq(documents.id, documentId), eq(documents.userId, user.id)))
     .limit(1);
 
-  if (!doc) return { ok: false, error: "Envelope not found." };
+  if (!doc) return { ok: false, error: t.sender.envelopeNotFound };
   if (doc.status !== "sent" && doc.status !== "draft") {
-    return { ok: false, error: `A ${doc.status} envelope cannot be voided.` };
+    return {
+      ok: false,
+      error: `${t.sender.cannotVoidPrefix}${t.status.doc[doc.status]}${t.sender.cannotVoidSuffix}`,
+    };
   }
 
   await db
@@ -98,8 +103,9 @@ export async function retryEnvelopeAdvance(
 export async function resendToRecipient(
   recipientId: string,
 ): Promise<ActionResult> {
+  const t = await getDictionary();
   const user = await getCurrentUser();
-  if (!user) return { ok: false, error: "You are not signed in." };
+  if (!user) return { ok: false, error: t.sender.notSignedIn };
 
   const [row] = await db
     .select({ recipient: recipients, doc: documents })
@@ -108,21 +114,21 @@ export async function resendToRecipient(
     .where(and(eq(recipients.id, recipientId), eq(documents.userId, user.id)))
     .limit(1);
 
-  if (!row) return { ok: false, error: "Recipient not found." };
+  if (!row) return { ok: false, error: t.sender.recipientNotFound };
 
   const { recipient, doc } = row;
 
   if (doc.status !== "sent") {
-    return { ok: false, error: "This envelope is not in progress." };
+    return { ok: false, error: t.sender.envelopeNotInProgress };
   }
   if (recipient.role !== "signer") {
-    return { ok: false, error: "Only signers receive a signing invite." };
+    return { ok: false, error: t.sender.onlySignersInvite };
   }
   if (recipient.status === "signed") {
-    return { ok: false, error: "This recipient has already signed." };
+    return { ok: false, error: t.sender.recipientAlreadySigned };
   }
   if (recipient.status === "declined") {
-    return { ok: false, error: "This recipient declined to sign." };
+    return { ok: false, error: t.sender.recipientDeclined };
   }
 
   await sendSigningInvite({
@@ -132,6 +138,7 @@ export async function resendToRecipient(
     documentTitle: doc.title,
     message: doc.message,
     signUrl: recipientSignUrl(recipient.token),
+    locale: await getLocale(),
   });
 
   // A never-notified recipient moves to `sent`; already-notified ones keep

@@ -11,7 +11,8 @@ import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 import { Alert, Spinner } from "@/components/ui";
-import { groupIsRequired, groupRuleLabel, groupSatisfied } from "@/lib/types";
+import { useI18n } from "@/lib/i18n/provider";
+import { formatGroupRule, groupIsRequired, groupSatisfied } from "@/lib/types";
 import { cn } from "@/lib/ui";
 import { checkedCount, fieldHasValue, isChecked } from "./requirements";
 import type { FieldValue, SignerField, SignerGroup } from "./types";
@@ -55,9 +56,13 @@ export function DocumentViewer({
   onToggleCheckbox,
   onOpenSignature,
 }: DocumentViewerProps) {
+  const { t } = useI18n();
   const bytes = useMemo(() => base64ToBytes(pdfBase64), [pdfBase64]);
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Store that it failed, not the sentence: holding the message would either
+  // re-run this effect (re-parsing the PDF) every time the locale changes, or
+  // leave the old language's text on screen after a switch.
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,7 +74,7 @@ export function DocumentViewer({
         if (!cancelled) setPdf(loaded);
       })
       .catch(() => {
-        if (!cancelled) setError("We couldn't display this document.");
+        if (!cancelled) setFailed(true);
       });
     // Destroying the loading task tears down the document proxy + worker link.
     return () => {
@@ -125,8 +130,8 @@ export function DocumentViewer({
         arr.push({
           id: group.id,
           text: group.label
-            ? `${group.label} · ${groupRuleLabel(group)}`
-            : groupRuleLabel(group),
+            ? `${group.label} · ${formatGroupRule(group, t.groupRule)}`
+            : formatGroupRule(group, t.groupRule),
           left,
           top,
           bottom,
@@ -135,12 +140,12 @@ export function DocumentViewer({
       }
     }
     return map;
-  }, [groupState, interactive]);
+  }, [groupState, interactive, t]);
 
-  if (error) {
+  if (failed) {
     return (
-      <Alert variant="error" title="Preview unavailable">
-        {error}
+      <Alert variant="error" title={t.signer.previewUnavailable}>
+        {t.signer.viewerError}
       </Alert>
     );
   }
@@ -148,7 +153,7 @@ export function DocumentViewer({
   if (!pdf) {
     return (
       <div className="flex items-center justify-center gap-3 rounded-2xl border border-border bg-surface py-24 text-sm text-muted-foreground">
-        <Spinner size={18} /> Loading document…
+        <Spinner size={18} /> {t.signer.loadingDocument}
       </div>
     );
   }
@@ -160,7 +165,7 @@ export function DocumentViewer({
       {groups.map((group) => (
         <span key={group.id} id={`sign-group-${group.id}`} className="sr-only">
           {group.label ? `${group.label}. ` : ""}
-          {groupRuleLabel(group)}
+          {formatGroupRule(group, t.groupRule)}
         </span>
       ))}
       {Array.from({ length: pageCount }, (_, i) => i + 1).map((pageNumber) => (
@@ -209,6 +214,7 @@ function PdfPage({
   pageNumber: number;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [renderWidth, setRenderWidth] = useState(0);
@@ -266,7 +272,7 @@ function PdfPage({
   return (
     <div className="w-full max-w-3xl">
       <div className="mb-1.5 text-center text-xs font-medium text-muted-foreground">
-        Page {pageNumber}
+        {t.signer.pageLabel} {pageNumber}
       </div>
       <div
         ref={wrapRef}
@@ -276,7 +282,7 @@ function PdfPage({
         <canvas
           ref={canvasRef}
           className="block h-auto w-full"
-          aria-label={`Document page ${pageNumber}`}
+          aria-label={`${t.signer.documentPageLabel} ${pageNumber}`}
         />
         {children}
       </div>
@@ -351,7 +357,11 @@ function FieldOverlay({
   onToggle: () => void;
   onOpenSignature: () => void;
 }) {
+  const { t } = useI18n();
   const filled = fieldHasValue(field, value);
+  // A grouped checkbox is never `required` on its own, so this correctly stays
+  // empty for it — the group's rule is announced via aria-describedby instead.
+  const requiredSuffix = field.required ? t.signer.requiredSuffix : "";
 
   const style: React.CSSProperties = {
     position: "absolute",
@@ -382,7 +392,7 @@ function FieldOverlay({
         style={style}
         onClick={onOpenSignature}
         disabled={!interactive}
-        aria-label={`${field.type === "initials" ? "Initials" : "Signature"} field${field.required ? ", required" : ""}`}
+        aria-label={`${field.type === "initials" ? t.fields.initials.label : t.fields.signature.label} ${t.signer.fieldWord}${requiredSuffix}`}
         className={cn(commonWrap, interactive && "cursor-pointer transition-colors")}
       >
         {value?.imageData ? (
@@ -419,7 +429,7 @@ function FieldOverlay({
               <path d="M3 17c3-1 4-9 6-9s2 6 4 6 2-4 4-4" />
               <path d="M3 20h18" />
             </svg>
-            {field.type === "initials" ? "Initials" : "Sign"}
+            {field.type === "initials" ? t.fields.initials.label : t.signer.signCta}
           </span>
         )}
       </button>
@@ -442,8 +452,8 @@ function FieldOverlay({
         }
         aria-label={
           radio
-            ? "Choice"
-            : `Checkbox${!field.groupId && field.required ? ", required" : ""}`
+            ? t.signer.choiceLabel
+            : `${t.fields.checkbox.label}${requiredSuffix}`
         }
         style={style}
         disabled={!interactive}
@@ -479,7 +489,7 @@ function FieldOverlay({
           onChange={(e) =>
             onChange(e.target.value ? { value: e.target.value } : null)
           }
-          aria-label={`Date field${field.required ? ", required" : ""}`}
+          aria-label={`${t.fields.date.label} ${t.signer.fieldWord}${requiredSuffix}`}
           className="h-full w-full bg-transparent px-1 text-center text-[inherit] text-slate-900 outline-none dark:text-slate-900"
         />
       </div>
@@ -496,8 +506,8 @@ function FieldOverlay({
         onChange={(e) =>
           onChange(e.target.value ? { value: e.target.value } : null)
         }
-        placeholder={field.required ? "Required" : ""}
-        aria-label={`Text field${field.required ? ", required" : ""}`}
+        placeholder={field.required ? t.signer.requiredPlaceholder : ""}
+        aria-label={`${t.fields.text.label} ${t.signer.fieldWord}${requiredSuffix}`}
         className="h-full w-full bg-transparent px-1 text-[inherit] text-slate-900 outline-none placeholder:text-brand-700/50 dark:text-slate-900"
       />
     </div>

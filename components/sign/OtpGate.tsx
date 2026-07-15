@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { Alert, Button } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/ui";
 
 export interface OtpGateProps {
@@ -15,6 +16,7 @@ export interface OtpGateProps {
  * calm and legible — this is the first friction a signer meets.
  */
 export function OtpGate({ token, onVerified }: OtpGateProps) {
+  const { t } = useI18n();
   const [stage, setStage] = useState<"start" | "code">("start");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -38,11 +40,11 @@ export function OtpGate({ token, onVerified }: OtpGateProps) {
     setError(null);
     try {
       const { ok, data } = await post("otp");
-      if (!ok) throw new Error(data?.error ?? "Couldn't send a code.");
+      if (!ok) throw new Error(data?.error ?? t.signer.sendCodeError);
       setDevMode(Boolean(data?.devMode));
       setStage("code");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't send a code.");
+      setError(e instanceof Error ? e.message : t.signer.sendCodeError);
     } finally {
       setBusy(false);
     }
@@ -50,17 +52,17 @@ export function OtpGate({ token, onVerified }: OtpGateProps) {
 
   async function verify() {
     if (code.trim().length < 6) {
-      setError("Enter the 6-digit code we sent you.");
+      setError(t.signer.enterCodeError);
       return;
     }
     setBusy(true);
     setError(null);
     try {
       const { ok, data } = await post("verify", { code: code.trim() });
-      if (!ok) throw new Error(data?.error ?? "That code didn't work.");
+      if (!ok) throw new Error(data?.error ?? t.signer.verifyError);
       onVerified();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "That code didn't work.");
+      setError(e instanceof Error ? e.message : t.signer.verifyError);
     } finally {
       setBusy(false);
     }
@@ -89,12 +91,12 @@ export function OtpGate({ token, onVerified }: OtpGateProps) {
             </svg>
           </span>
           <h1 className="text-lg font-semibold tracking-tight text-foreground">
-            Verify it&apos;s you
+            {t.signer.verifyTitle}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {stage === "start"
-              ? "This document requires identity verification. We'll text a one-time code to the phone number on file."
-              : "Enter the 6-digit code we just sent by SMS."}
+              ? t.signer.verifyDescStart
+              : t.signer.verifyDescCode}
           </p>
         </div>
 
@@ -106,7 +108,7 @@ export function OtpGate({ token, onVerified }: OtpGateProps) {
 
         {stage === "start" ? (
           <Button fullWidth size="lg" loading={busy} onClick={sendCode}>
-            Send verification code
+            {t.signer.sendCode}
           </Button>
         ) : (
           <div className="space-y-4">
@@ -123,7 +125,7 @@ export function OtpGate({ token, onVerified }: OtpGateProps) {
                 if (e.key === "Enter") verify();
               }}
               placeholder="••••••"
-              aria-label="6-digit verification code"
+              aria-label={t.signer.codeAriaLabel}
               className={cn(
                 "h-14 w-full rounded-xl border border-input-border bg-input text-center text-2xl font-semibold tracking-[0.5em] text-foreground shadow-sm outline-none",
                 "focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/35",
@@ -136,19 +138,19 @@ export function OtpGate({ token, onVerified }: OtpGateProps) {
               disabled={code.length < 6}
               onClick={verify}
             >
-              Verify &amp; continue
+              {t.signer.verifyContinue}
             </Button>
             <div className="flex items-center justify-center">
               <Button variant="ghost" size="sm" onClick={sendCode} disabled={busy}>
-                Resend code
+                {t.signer.resendCode}
               </Button>
             </div>
 
             {devMode && (
-              <Alert variant="info" title="Developer mode">
-                SMS isn&apos;t configured, so the code was printed to your server
-                console. The code <code className="font-mono">000000</code> also
-                works here.
+              <Alert variant="info" title={t.signer.devModeTitle}>
+                {t.signer.devModePrefix}
+                <code className="font-mono">000000</code>
+                {t.signer.devModeSuffix}
               </Alert>
             )}
           </div>

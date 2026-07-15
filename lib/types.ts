@@ -182,34 +182,100 @@ export function groupSatisfied(checked: number, rule: GroupRule): boolean {
 /**
  * Why a rule can't be met by a group of `memberCount` boxes, or `null` if it
  * can. Shared by the editor (to warn early) and the prepare route (to reject).
+ *
+ * Returns a code rather than a sentence: the sender reads it in their own
+ * language through the dictionary, while the API answers in English like the
+ * rest of its errors. Both render it through `formatGroupIssue`.
  */
-export function groupRuleProblem(
+export type GroupRuleIssue =
+  | { code: "negativeMin" }
+  | { code: "maxTooLow" }
+  | { code: "maxBelowMin" }
+  | { code: "empty" }
+  | { code: "minAboveMembers"; min: number; memberCount: number };
+
+export function groupRuleIssue(
   rule: GroupRule,
   memberCount: number,
-): string | null {
-  if (rule.minSelected < 0) return "The minimum can't be negative.";
+): GroupRuleIssue | null {
+  if (rule.minSelected < 0) return { code: "negativeMin" };
   if (rule.maxSelected !== null && rule.maxSelected < 1) {
-    return "The maximum must be at least 1.";
+    return { code: "maxTooLow" };
   }
   if (rule.maxSelected !== null && rule.maxSelected < rule.minSelected) {
-    return "The maximum can't be lower than the minimum.";
+    return { code: "maxBelowMin" };
   }
-  if (memberCount === 0) return "This group has no checkboxes.";
+  if (memberCount === 0) return { code: "empty" };
   if (rule.minSelected > memberCount) {
-    return `This group asks for ${rule.minSelected} but only has ${memberCount} ${
-      memberCount === 1 ? "checkbox" : "checkboxes"
-    }.`;
+    return { code: "minAboveMembers", min: rule.minSelected, memberCount };
   }
   return null;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Group wording                                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The strings needed to describe a group rule, supplied by the caller's
+ * dictionary. Declared structurally so this module stays free of any i18n
+ * import — the locale files satisfy the shape, and `en.ts` is the source the
+ * server passes when answering in English.
+ *
+ * Numbers are composed from prefix/suffix pairs rather than placeholders, since
+ * "Choose at least 3" and "3개 이상 선택" put the number in different places.
+ */
+export interface GroupRuleStrings {
+  anyOptional: string;
+  one: string;
+  atLeastPrefix: string;
+  atLeastSuffix: string;
+  exactlyPrefix: string;
+  exactlySuffix: string;
+  upToPrefix: string;
+  upToSuffix: string;
+  betweenPrefix: string;
+  betweenMid: string;
+  betweenSuffix: string;
+}
+
+export interface GroupIssueStrings {
+  negativeMin: string;
+  maxTooLow: string;
+  maxBelowMin: string;
+  empty: string;
+  minAbovePrefix: string;
+  minAboveMid: string;
+  minAboveSuffix: string;
+}
+
 /** Signer-facing description of a rule, e.g. "Choose at least 1". */
-export function groupRuleLabel(rule: GroupRule): string {
+export function formatGroupRule(rule: GroupRule, s: GroupRuleStrings): string {
   const { minSelected: min, maxSelected: max } = rule;
   if (max === null) {
-    return min === 0 ? "Choose any (optional)" : `Choose at least ${min}`;
+    return min === 0 ? s.anyOptional : `${s.atLeastPrefix}${min}${s.atLeastSuffix}`;
   }
-  if (min === max) return min === 1 ? "Choose one" : `Choose exactly ${min}`;
-  if (min === 0) return `Choose up to ${max} (optional)`;
-  return `Choose ${min}–${max}`;
+  if (min === max) {
+    return min === 1 ? s.one : `${s.exactlyPrefix}${min}${s.exactlySuffix}`;
+  }
+  if (min === 0) return `${s.upToPrefix}${max}${s.upToSuffix}`;
+  return `${s.betweenPrefix}${min}${s.betweenMid}${max}${s.betweenSuffix}`;
+}
+
+export function formatGroupIssue(
+  issue: GroupRuleIssue,
+  s: GroupIssueStrings,
+): string {
+  switch (issue.code) {
+    case "negativeMin":
+      return s.negativeMin;
+    case "maxTooLow":
+      return s.maxTooLow;
+    case "maxBelowMin":
+      return s.maxBelowMin;
+    case "empty":
+      return s.empty;
+    case "minAboveMembers":
+      return `${s.minAbovePrefix}${issue.min}${s.minAboveMid}${issue.memberCount}${s.minAboveSuffix}`;
+  }
 }

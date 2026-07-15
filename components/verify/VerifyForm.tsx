@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 
 import { cn } from "@/lib/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { Button, Input, Label, Alert } from "@/components/ui";
 import { VerifyResult } from "./VerifyResult";
 import type { VerifyResponse } from "./types";
@@ -12,6 +13,7 @@ type Mode = "file" | "id";
 const MAX_BYTES = 25 * 1024 * 1024; // 25 MB
 
 export function VerifyForm() {
+  const { t } = useI18n();
   const [mode, setMode] = useState<Mode>("file");
   const [documentId, setDocumentId] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -29,12 +31,12 @@ export function VerifyForm() {
   function pickFile(next: File | null) {
     reset();
     if (next && next.type && next.type !== "application/pdf") {
-      setError("Please choose a PDF file.");
+      setError(t.verify.errorNotPdf);
       setFile(null);
       return;
     }
     if (next && next.size > MAX_BYTES) {
-      setError("That file is larger than 25 MB.");
+      setError(t.verify.errorTooLarge);
       setFile(null);
       return;
     }
@@ -48,7 +50,7 @@ export function VerifyForm() {
       let res: Response;
       if (mode === "file") {
         if (!file) {
-          setError("Choose a PDF file to verify.");
+          setError(t.verify.errorNoFile);
           setLoading(false);
           return;
         }
@@ -57,7 +59,7 @@ export function VerifyForm() {
         res = await fetch("/api/verify", { method: "POST", body: form });
       } else {
         if (!documentId.trim()) {
-          setError("Enter a document ID to verify.");
+          setError(t.verify.errorNoId);
           setLoading(false);
           return;
         }
@@ -71,7 +73,7 @@ export function VerifyForm() {
       const data = (await res.json()) as VerifyResponse;
       setResult(data);
     } catch {
-      setError("Something went wrong. Please try again.");
+      setError(t.verify.errorGeneric);
     } finally {
       setLoading(false);
     }
@@ -83,12 +85,12 @@ export function VerifyForm() {
       <div
         className="inline-flex rounded-xl border border-border bg-surface-2/60 p-1"
         role="tablist"
-        aria-label="Verification method"
+        aria-label={t.verify.methodLabel}
       >
         {(
           [
-            ["file", "Upload PDF"],
-            ["id", "Document ID"],
+            ["file", t.verify.tabFile],
+            ["id", t.verify.documentId],
           ] as const
         ).map(([value, label]) => {
           const active = mode === value;
@@ -166,10 +168,10 @@ export function VerifyForm() {
             ) : (
               <>
                 <span className="text-sm font-medium text-foreground">
-                  Drop a PDF here, or click to browse
+                  {t.verify.dropPrompt}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Your file is hashed and matched — it is not stored.
+                  {t.verify.dropHint}
                 </span>
               </>
             )}
@@ -184,7 +186,7 @@ export function VerifyForm() {
         </div>
       ) : (
         <div className="space-y-1.5">
-          <Label htmlFor="documentId">Document ID</Label>
+          <Label htmlFor="documentId">{t.verify.documentId}</Label>
           <Input
             id="documentId"
             value={documentId}
@@ -204,7 +206,7 @@ export function VerifyForm() {
       )}
 
       {error && (
-        <Alert variant="error" title="Couldn't verify">
+        <Alert variant="error" title={t.verify.alertTitle}>
           {error}
         </Alert>
       )}
@@ -216,7 +218,7 @@ export function VerifyForm() {
         size="lg"
         disabled={mode === "file" ? !file : !documentId.trim()}
       >
-        Verify document
+        {t.verify.submit}
       </Button>
 
       {result && <VerifyResult result={result} />}

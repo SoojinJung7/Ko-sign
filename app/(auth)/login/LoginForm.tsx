@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 
 import { Alert, Button, Card, CardContent, Input, Label } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/provider";
 
 const MailIcon = (
   <svg
@@ -24,10 +25,11 @@ const MailIcon = (
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function LoginForm({ initialError = false }: { initialError?: boolean }) {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "sent">("idle");
   const [error, setError] = useState<string | null>(
-    initialError ? "That sign-in link was invalid or expired. Try again." : null,
+    initialError ? t.auth.errorInvalidLink : null,
   );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -35,7 +37,7 @@ export function LoginForm({ initialError = false }: { initialError?: boolean }) 
     const trimmed = email.trim();
 
     if (!EMAIL_RE.test(trimmed)) {
-      setError("Please enter a valid email address.");
+      setError(t.auth.errorInvalidEmail);
       return;
     }
 
@@ -53,14 +55,14 @@ export function LoginForm({ initialError = false }: { initialError?: boolean }) 
         const data = (await res.json().catch(() => null)) as {
           error?: string;
         } | null;
-        setError(data?.error ?? "Something went wrong. Please try again.");
+        setError(data?.error ?? t.auth.errorGeneric);
         setStatus("idle");
         return;
       }
 
       setStatus("sent");
     } catch {
-      setError("Couldn't reach the server. Please try again.");
+      setError(t.auth.errorNetwork);
       setStatus("idle");
     }
   }
@@ -89,12 +91,12 @@ export function LoginForm({ initialError = false }: { initialError?: boolean }) 
           </span>
           <div>
             <h2 className="text-base font-semibold text-foreground">
-              Check your email
+              {t.auth.sentHeading}
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              We sent a sign-in link to{" "}
+              {t.auth.sentPrefix}{" "}
               <span className="font-medium text-foreground">{email.trim()}</span>
-              . Click it to finish signing in — it expires in 15 minutes.
+              {t.auth.sentSuffix}
             </p>
           </div>
           <Button
@@ -105,7 +107,7 @@ export function LoginForm({ initialError = false }: { initialError?: boolean }) 
               setError(null);
             }}
           >
-            Use a different email
+            {t.auth.useDifferentEmail}
           </Button>
         </CardContent>
       </Card>
@@ -123,7 +125,7 @@ export function LoginForm({ initialError = false }: { initialError?: boolean }) 
           )}
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="email">Email address</Label>
+            <Label htmlFor="email">{t.auth.emailLabel}</Label>
             <Input
               id="email"
               name="email"
@@ -131,7 +133,7 @@ export function LoginForm({ initialError = false }: { initialError?: boolean }) 
               inputMode="email"
               autoComplete="email"
               autoFocus
-              placeholder="you@example.com"
+              placeholder={t.auth.emailPlaceholder}
               leadingIcon={MailIcon}
               value={email}
               invalid={Boolean(error)}
@@ -146,7 +148,7 @@ export function LoginForm({ initialError = false }: { initialError?: boolean }) 
             loading={status === "submitting"}
             disabled={status === "submitting"}
           >
-            Send magic link
+            {t.auth.submit}
           </Button>
         </form>
       </CardContent>

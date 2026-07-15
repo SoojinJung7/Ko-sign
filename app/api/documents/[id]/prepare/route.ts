@@ -13,7 +13,12 @@ import {
 } from "@/db/schema";
 import { newId, randomToken } from "@/lib/crypto";
 import { requireUser } from "@/lib/session";
-import { groupRuleProblem, MAX_GROUP_MEMBERS } from "@/lib/types";
+import { en } from "@/lib/i18n/locales/en";
+import {
+  formatGroupIssue,
+  groupRuleIssue,
+  MAX_GROUP_MEMBERS,
+} from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -183,15 +188,15 @@ export async function PUT(
   // Reject rules no signer could ever satisfy (min above the member count, an
   // empty group, an inverted range).
   for (const g of groups) {
-    const problem = groupRuleProblem(
+    const issue = groupRuleIssue(
       { minSelected: g.minSelected, maxSelected: g.maxSelected },
       memberCount.get(g.id) ?? 0,
     );
-    if (problem) {
+    if (issue) {
       return Response.json(
         {
           ok: false,
-          error: `${g.label ? `“${g.label}”: ` : "A checkbox group is invalid: "}${problem}`,
+          error: `${g.label ? `“${g.label}”: ` : "A checkbox group is invalid: "}${formatGroupIssue(issue, en.groupIssue)}`,
         },
         { status: 422 },
       );

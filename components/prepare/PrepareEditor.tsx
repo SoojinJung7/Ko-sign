@@ -14,10 +14,12 @@ import * as pdfjs from "pdfjs-dist";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 
 import { Alert, Button, Input, Label, Spinner } from "@/components/ui";
+import { useI18n } from "@/lib/i18n/provider";
 import { newId } from "@/lib/crypto";
 import {
-  groupRuleLabel,
-  groupRuleProblem,
+  formatGroupIssue,
+  formatGroupRule,
+  groupRuleIssue,
   type FieldType,
   type GroupRule,
 } from "@/lib/types";
@@ -147,6 +149,7 @@ export function PrepareEditor({
   initialGroups,
   initialFields,
 }: PrepareEditorProps) {
+  const { t } = useI18n();
   const router = useRouter();
 
   const [recipients, setRecipients] = useState<EditorRecipient[]>(() =>
@@ -353,24 +356,24 @@ export function PrepareEditor({
   );
 
   const validate = useCallback((): string | null => {
-    if (recipients.length === 0) return "Add at least one recipient.";
+    if (recipients.length === 0) return t.prepare.errAddRecipient;
     for (const r of recipients) {
-      if (!r.name.trim()) return "Every recipient needs a name.";
+      if (!r.name.trim()) return t.prepare.errRecipientName;
       if (!EMAIL_RE.test(r.email.trim())) {
-        return `“${r.name || r.email || "A recipient"}” needs a valid email address.`;
+        return `“${r.name || r.email || t.prepare.aRecipient}” ${t.prepare.needsValidEmail}`;
       }
     }
     if (fields.length === 0) {
-      return "Place at least one field on the document.";
+      return t.prepare.errPlaceField;
     }
     for (const g of liveGroups) {
-      const problem = groupRuleProblem(g, membersOf(g.id).length);
-      if (problem) {
-        return `${g.label ? `“${g.label}”` : "A checkbox group"}: ${problem}`;
+      const issue = groupRuleIssue(g, membersOf(g.id).length);
+      if (issue) {
+        return `${g.label ? `“${g.label}”` : t.prepare.aGroup}: ${formatGroupIssue(issue, t.groupIssue)}`;
       }
     }
     return null;
-  }, [recipients, fields, liveGroups, membersOf]);
+  }, [recipients, fields, liveGroups, membersOf, t]);
 
   const buildPayload = useCallback(
     () => ({
@@ -417,10 +420,10 @@ export function PrepareEditor({
     });
     const data = (await res.json().catch(() => null)) as SaveResponse | null;
     if (!res.ok || !data?.ok) {
-      throw new Error(data?.error ?? "We couldn't save your changes.");
+      throw new Error(data?.error ?? t.prepare.saveError);
     }
     return true;
-  }, [documentId, buildPayload]);
+  }, [documentId, buildPayload, t]);
 
   const onSaveDraft = useCallback(async () => {
     if (busy) return;
@@ -429,29 +432,31 @@ export function PrepareEditor({
       recipients.length > 0 &&
       recipients.find((r) => r.email.trim() && !EMAIL_RE.test(r.email.trim()));
     if (invalid) {
-      setError(`“${invalid.name || invalid.email}” has an invalid email.`);
+      setError(`“${invalid.name || invalid.email}” ${t.prepare.hasInvalidEmail}`);
       return;
     }
     // A draft may hold blank recipients, but never a group rule the server will
     // reject — that would fail the save with a raw 422 instead of a fixable
     // message pointing at the group.
     for (const g of liveGroups) {
-      const problem = groupRuleProblem(g, membersOf(g.id).length);
-      if (problem) {
-        setError(`${g.label ? `“${g.label}”` : "A checkbox group"}: ${problem}`);
+      const issue = groupRuleIssue(g, membersOf(g.id).length);
+      if (issue) {
+        setError(
+          `${g.label ? `“${g.label}”` : t.prepare.aGroup}: ${formatGroupIssue(issue, t.groupIssue)}`,
+        );
         return;
       }
     }
     setSaving(true);
     try {
       await save();
-      setToast("Draft saved.");
+      setToast(t.prepare.draftSaved);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save.");
+      setError(err instanceof Error ? err.message : t.prepare.saveFailed);
     } finally {
       setSaving(false);
     }
-  }, [busy, recipients, liveGroups, membersOf, save]);
+  }, [busy, recipients, liveGroups, membersOf, save, t]);
 
   const onSend = useCallback(async () => {
     if (busy) return;
@@ -469,14 +474,14 @@ export function PrepareEditor({
       });
       const data = (await res.json().catch(() => null)) as SaveResponse | null;
       if (!res.ok || !data?.ok) {
-        throw new Error(data?.error ?? "We couldn't send this envelope.");
+        throw new Error(data?.error ?? t.prepare.sendError);
       }
       router.push(`/documents/${documentId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to send.");
+      setError(err instanceof Error ? err.message : t.prepare.sendFailed);
       setSending(false);
     }
-  }, [busy, validate, save, documentId, router]);
+  }, [busy, validate, save, documentId, router, t]);
 
   /* ----- render ----- */
 
@@ -533,10 +538,10 @@ export function PrepareEditor({
             />
             <span>
               <span className="block text-sm font-medium text-foreground">
-                Require identity verification
+                {t.prepare.requireIdentity}
               </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
-                Signers with a phone number receive an SMS code before signing.
+                {t.prepare.requireIdentityHint}
               </span>
             </span>
           </label>
@@ -552,10 +557,10 @@ export function PrepareEditor({
             </h1>
             <p className="text-xs text-muted-foreground">
               {activeTool
-                ? "Click on the document to place the field."
+                ? t.prepare.clickToPlace
                 : activeRecipient
-                  ? `Placing fields for ${activeRecipient.name || "recipient"}. Pick a field type.`
-                  : "Add a recipient to begin placing fields."}
+                  ? `${t.prepare.placingPrefix}${activeRecipient.name || t.prepare.recipientFallback}${t.prepare.placingSuffix}`
+                  : t.prepare.addRecipientToBegin}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -565,16 +570,16 @@ export function PrepareEditor({
               loading={saving}
               disabled={busy}
             >
-              Save draft
+              {t.prepare.saveDraft}
             </Button>
             <Button onClick={onSend} loading={sending} disabled={busy}>
-              Send envelope
+              {t.prepare.sendEnvelope}
             </Button>
           </div>
         </header>
 
         {error && (
-          <Alert variant="error" title="Please fix the following">
+          <Alert variant="error" title={t.prepare.fixFollowing}>
             {error}
           </Alert>
         )}
@@ -597,7 +602,7 @@ export function PrepareEditor({
                 colorBase={colorForIndex(recipientIndex.get(f.recipientId) ?? 0).base}
                 recipientLabel={
                   recipients.find((r) => r.id === f.recipientId)?.name ||
-                  "Recipient"
+                  t.prepare.recipientLabelFallback
                 }
                 groupLabel={groupBadgeFor(f, groups)}
                 selected={selectedFieldId === f.id}
@@ -643,18 +648,19 @@ function RecipientPanel({
   onRemove: (id: string) => void;
   onMove: (id: string, dir: -1 | 1) => void;
 }) {
+  const { t } = useI18n();
   return (
     <section className="rounded-xl border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <h2 className="text-sm font-semibold text-foreground">Recipients</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t.prepare.recipients}</h2>
         <Button size="sm" variant="ghost" onClick={onAdd} disabled={disabled}>
-          + Add
+          {t.prepare.add}
         </Button>
       </div>
 
       {recipients.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-muted-foreground">
-          No recipients yet. Add the people who need to sign.
+          {t.prepare.noRecipients}
         </p>
       ) : (
         <ul className="flex flex-col gap-3 p-3">
@@ -689,30 +695,30 @@ function RecipientPanel({
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-foreground">
-                        {r.name || "Unnamed recipient"}
+                        {r.name || t.prepare.unnamedRecipient}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {count} {count === 1 ? "field" : "fields"}
+                        {count} {count === 1 ? t.prepare.fieldSingular : t.prepare.fieldPlural}
                       </span>
                     </span>
                   </button>
                   <div className="flex shrink-0 items-center">
                     <IconButton
-                      label="Move up"
+                      label={t.prepare.moveUp}
                       disabled={disabled || i === 0}
                       onClick={() => onMove(r.id, -1)}
                     >
                       <path d="m6 15 6-6 6 6" />
                     </IconButton>
                     <IconButton
-                      label="Move down"
+                      label={t.prepare.moveDown}
                       disabled={disabled || i === recipients.length - 1}
                       onClick={() => onMove(r.id, 1)}
                     >
                       <path d="m6 9 6 6 6-6" />
                     </IconButton>
                     <IconButton
-                      label="Remove recipient"
+                      label={t.prepare.removeRecipient}
                       disabled={disabled}
                       onClick={() => onRemove(r.id)}
                     >
@@ -724,38 +730,38 @@ function RecipientPanel({
                 <div className="flex flex-col gap-2">
                   <div>
                     <Label htmlFor={`rcp-name-${r.id}`} className="sr-only">
-                      Name
+                      {t.prepare.nameLabel}
                     </Label>
                     <Input
                       id={`rcp-name-${r.id}`}
                       value={r.name}
-                      placeholder="Full name"
+                      placeholder={t.prepare.fullNamePlaceholder}
                       disabled={disabled}
                       onChange={(e) => onUpdate(r.id, { name: e.target.value })}
                     />
                   </div>
                   <div>
                     <Label htmlFor={`rcp-email-${r.id}`} className="sr-only">
-                      Email
+                      {t.prepare.emailLabel}
                     </Label>
                     <Input
                       id={`rcp-email-${r.id}`}
                       type="email"
                       value={r.email}
-                      placeholder="name@example.com"
+                      placeholder={t.prepare.emailPlaceholder}
                       disabled={disabled}
                       onChange={(e) => onUpdate(r.id, { email: e.target.value })}
                     />
                   </div>
                   <div>
                     <Label htmlFor={`rcp-phone-${r.id}`} className="sr-only">
-                      Phone (optional)
+                      {t.prepare.phoneLabel}
                     </Label>
                     <Input
                       id={`rcp-phone-${r.id}`}
                       type="tel"
                       value={r.phone}
-                      placeholder="Phone (optional, for SMS code)"
+                      placeholder={t.prepare.phonePlaceholder}
                       disabled={disabled}
                       onChange={(e) => onUpdate(r.id, { phone: e.target.value })}
                     />
@@ -820,14 +826,15 @@ function FieldPalette({
   canPlace: boolean;
   onPick: (type: FieldType) => void;
 }) {
+  const { t } = useI18n();
   return (
     <section className="rounded-xl border border-border bg-surface p-3">
       <h2 className="px-1 pb-2 text-sm font-semibold text-foreground">
-        Fields
+        {t.prepare.fields}
       </h2>
       {!canPlace && (
         <p className="px-1 pb-2 text-xs text-muted-foreground">
-          Select a recipient first.
+          {t.prepare.selectRecipientFirst}
         </p>
       )}
       <div className="grid grid-cols-2 gap-2">
@@ -840,7 +847,7 @@ function FieldPalette({
               disabled={!canPlace}
               onClick={() => onPick(meta.type)}
               aria-pressed={active}
-              title={meta.hint}
+              title={t.fields[meta.type].hint}
               className={cn(
                 "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
                 "disabled:pointer-events-none disabled:opacity-50",
@@ -862,7 +869,7 @@ function FieldPalette({
               >
                 <path d={meta.icon} />
               </svg>
-              <span className="truncate">{meta.label}</span>
+              <span className="truncate">{t.fields[meta.type].label}</span>
             </button>
           );
         })}
@@ -903,6 +910,7 @@ function FieldSettings({
   ) => void;
   onRemoveGroup: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const group = groups.find((g) => g.id === field.groupId) ?? null;
   const isCheckbox = field.type === "checkbox";
 
@@ -910,8 +918,8 @@ function FieldSettings({
     <section className="rounded-xl border border-border bg-surface">
       <div className="border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold text-foreground">
-          {FIELD_TYPE_META.find((m) => m.type === field.type)?.label ?? "Field"}{" "}
-          settings
+          {t.fields[field.type].label}
+          {t.prepare.fieldSettingsSuffix}
         </h2>
       </div>
 
@@ -920,8 +928,7 @@ function FieldSettings({
             is the requirement, so offering both would let them contradict. */}
         {group ? (
           <p className="text-xs text-muted-foreground">
-            This checkbox is one option in a group. The group&apos;s rule decides
-            what the signer must do.
+            {t.prepare.groupedNoRequired}
           </p>
         ) : (
           <label className="flex cursor-pointer items-start gap-3">
@@ -934,12 +941,12 @@ function FieldSettings({
             />
             <span>
               <span className="block text-sm font-medium text-foreground">
-                Required
+                {t.prepare.requiredLabel}
               </span>
               <span className="mt-0.5 block text-xs text-muted-foreground">
                 {isCheckbox
-                  ? "The signer must tick this box to continue."
-                  : "The signer must fill this in to continue."}
+                  ? t.prepare.requiredHintCheckbox
+                  : t.prepare.requiredHintField}
               </span>
             </span>
           </label>
@@ -947,10 +954,11 @@ function FieldSettings({
 
         {isCheckbox && (
           <div className="flex flex-col gap-2 border-t border-border pt-4">
-            <Label htmlFor={`fld-group-${field.id}`}>Choice group</Label>
+            <Label htmlFor={`fld-group-${field.id}`}>
+              {t.prepare.choiceGroup}
+            </Label>
             <p className="-mt-1 text-xs text-muted-foreground">
-              Group boxes the signer picks between, instead of making each one
-              mandatory on its own.
+              {t.prepare.choiceGroupHint}
             </p>
             <select
               id={`fld-group-${field.id}`}
@@ -963,13 +971,14 @@ function FieldSettings({
                 else onAssignGroup(value === "none" ? null : value);
               }}
             >
-              <option value="none">No group — stands alone</option>
+              <option value="none">{t.prepare.groupNone}</option>
               {groups.map((g, i) => (
                 <option key={g.id} value={g.id}>
-                  {g.label.trim() || `Group ${i + 1}`} ({memberCountOf(g.id)})
+                  {g.label.trim() || `${t.prepare.groupFallbackPrefix}${i + 1}`} (
+                  {memberCountOf(g.id)})
                 </option>
               ))}
-              <option value="new">+ New group…</option>
+              <option value="new">{t.prepare.groupNew}</option>
             </select>
 
             {group && (
@@ -1001,27 +1010,32 @@ function GroupSettings({
   onUpdate: (patch: Partial<Omit<EditorGroup, "id" | "recipientId">>) => void;
   onRemove: () => void;
 }) {
+  const { t } = useI18n();
   const preset = presetFor(group);
-  const problem = groupRuleProblem(group, memberCount);
+  const issue = groupRuleIssue(group, memberCount);
 
   return (
     <div className="mt-2 flex flex-col gap-3 rounded-lg border border-border bg-surface-2 p-3">
       <div>
-        <Label htmlFor={`grp-label-${group.id}`}>Group name</Label>
+        <Label htmlFor={`grp-label-${group.id}`}>
+          {t.prepare.groupNameLabel}
+        </Label>
         <Input
           id={`grp-label-${group.id}`}
           value={group.label}
-          placeholder="e.g. Promotion methods"
+          placeholder={t.prepare.groupNamePlaceholder}
           disabled={disabled}
           onChange={(e) => onUpdate({ label: e.target.value })}
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          Shown to the signer above the group. Optional.
+          {t.prepare.groupNameHint}
         </p>
       </div>
 
       <div>
-        <Label htmlFor={`grp-rule-${group.id}`}>The signer must</Label>
+        <Label htmlFor={`grp-rule-${group.id}`}>
+          {t.prepare.groupRuleLabel}
+        </Label>
         <select
           id={`grp-rule-${group.id}`}
           className={selectClasses}
@@ -1037,17 +1051,17 @@ function GroupSettings({
             else onUpdate({ maxSelected: group.maxSelected ?? memberCount });
           }}
         >
-          <option value="one">Choose exactly one (like a radio button)</option>
-          <option value="atLeastOne">Choose at least one</option>
-          <option value="any">Choose any, or none (optional)</option>
-          <option value="custom">Custom…</option>
+          <option value="one">{t.prepare.ruleOne}</option>
+          <option value="atLeastOne">{t.prepare.ruleAtLeastOne}</option>
+          <option value="any">{t.prepare.ruleAny}</option>
+          <option value="custom">{t.prepare.ruleCustom}</option>
         </select>
       </div>
 
       {preset === "custom" && (
         <div className="flex items-end gap-2">
           <div className="flex-1">
-            <Label htmlFor={`grp-min-${group.id}`}>Min</Label>
+            <Label htmlFor={`grp-min-${group.id}`}>{t.prepare.minLabel}</Label>
             <Input
               id={`grp-min-${group.id}`}
               type="number"
@@ -1061,13 +1075,13 @@ function GroupSettings({
             />
           </div>
           <div className="flex-1">
-            <Label htmlFor={`grp-max-${group.id}`}>Max</Label>
+            <Label htmlFor={`grp-max-${group.id}`}>{t.prepare.maxLabel}</Label>
             <Input
               id={`grp-max-${group.id}`}
               type="number"
               min={1}
               max={memberCount}
-              placeholder="No limit"
+              placeholder={t.prepare.maxNoLimit}
               value={group.maxSelected ?? ""}
               disabled={disabled}
               onChange={(e) =>
@@ -1082,13 +1096,18 @@ function GroupSettings({
       )}
 
       <p className="text-xs text-muted-foreground">
-        {memberCount} {memberCount === 1 ? "checkbox" : "checkboxes"} in this
-        group · Signer sees “{groupRuleLabel(group)}”
+        {memberCount}
+        {memberCount === 1
+          ? t.prepare.groupSummaryCheckbox
+          : t.prepare.groupSummaryCheckboxes}
+        {t.prepare.groupSummarySeesPrefix}
+        {formatGroupRule(group, t.groupRule)}
+        {t.prepare.groupSummarySeesSuffix}
       </p>
 
-      {problem && (
+      {issue && (
         <p className="text-xs text-tone-danger" role="alert">
-          {problem}
+          {formatGroupIssue(issue, t.groupIssue)}
         </p>
       )}
 
@@ -1099,7 +1118,7 @@ function GroupSettings({
         onClick={onRemove}
         className="self-start text-tone-danger hover:bg-tone-danger-soft hover:text-tone-danger"
       >
-        Ungroup these checkboxes
+        {t.prepare.ungroup}
       </Button>
     </div>
   );
@@ -1129,6 +1148,7 @@ function PdfCanvas({
   onPlace: (page: number, nx: number, ny: number) => void;
   renderPageFields: (page: number) => ReactNode;
 }) {
+  const { t } = useI18n();
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -1140,17 +1160,17 @@ function PdfCanvas({
         if (!cancelled) setPdf(loaded);
       })
       .catch(() => {
-        if (!cancelled) setError("We couldn't display this document.");
+        if (!cancelled) setError(t.prepare.previewError);
       });
     return () => {
       cancelled = true;
       task.destroy();
     };
-  }, [pdfUrl]);
+  }, [pdfUrl, t]);
 
   if (error) {
     return (
-      <Alert variant="error" title="Preview unavailable">
+      <Alert variant="error" title={t.prepare.previewUnavailable}>
         {error}
       </Alert>
     );
@@ -1159,7 +1179,7 @@ function PdfCanvas({
   if (!pdf) {
     return (
       <div className="flex items-center justify-center gap-3 rounded-2xl border border-border bg-surface py-24 text-sm text-muted-foreground">
-        <Spinner size={18} /> Loading document…
+        <Spinner size={18} /> {t.prepare.loadingDocument}
       </div>
     );
   }
@@ -1194,6 +1214,7 @@ function PdfPage({
   onPlace: (nx: number, ny: number) => void;
   children: ReactNode;
 }) {
+  const { t } = useI18n();
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [renderWidth, setRenderWidth] = useState(0);
@@ -1261,7 +1282,7 @@ function PdfPage({
   return (
     <div className="w-full max-w-3xl">
       <div className="mb-1.5 text-center text-xs font-medium text-muted-foreground">
-        Page {pageNumber}
+        {t.prepare.page} {pageNumber}
       </div>
       <div
         ref={wrapRef}
@@ -1275,7 +1296,7 @@ function PdfPage({
         <canvas
           ref={canvasRef}
           className="pointer-events-none block h-auto w-full"
-          aria-label={`Document page ${pageNumber}`}
+          aria-label={`${t.prepare.documentPage} ${pageNumber}`}
         />
         {children}
       </div>
@@ -1312,6 +1333,7 @@ function FieldBox({
   onChange: (patch: Partial<Omit<EditorField, "id">>) => void;
   onRemove: () => void;
 }) {
+  const { t } = useI18n();
   const elRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
     mode: DragMode;
@@ -1403,8 +1425,8 @@ function FieldBox({
       tabIndex={0}
       aria-label={
         groupLabel
-          ? `${field.type} field for ${recipientLabel}, in group ${groupLabel}`
-          : `${field.type} field for ${recipientLabel}`
+          ? `${t.fields[field.type].label} ${t.prepare.fieldFor} ${recipientLabel} · ${groupLabel}`
+          : `${t.fields[field.type].label} ${t.prepare.fieldFor} ${recipientLabel}`
       }
       onPointerDown={(e) => beginDrag("move", e)}
       onPointerMove={onPointerMove}
@@ -1455,7 +1477,7 @@ function FieldBox({
       {/* Delete affordance */}
       <button
         type="button"
-        aria-label="Delete field"
+        aria-label={t.prepare.deleteField}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
@@ -1483,7 +1505,7 @@ function FieldBox({
       {/* Resize handle */}
       <span
         role="slider"
-        aria-label="Resize field"
+        aria-label={t.prepare.resizeField}
         aria-valuenow={Math.round(field.width * 100)}
         tabIndex={-1}
         onPointerDown={(e) => beginDrag("resize", e)}
