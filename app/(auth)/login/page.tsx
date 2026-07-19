@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { getDictionary } from "@/lib/i18n/server";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, isAdminEmail } from "@/lib/session";
 import { LoginForm } from "./LoginForm";
+import { ForbiddenNotice } from "./ForbiddenNotice";
 
 export const runtime = "nodejs";
 
@@ -20,12 +21,15 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  // Already signed in? Skip the form.
+  // Already signed in as an admin? Skip the form. A signed-in *non-admin* is not
+  // redirected (that would loop against the admin-gated shell) — we show them an
+  // access-denied notice below instead.
   const user = await getCurrentUser();
-  if (user) redirect("/dashboard");
+  if (user && isAdminEmail(user.email)) redirect("/dashboard");
 
-  const { error } = await searchParams;
+  const { error, forbidden } = await searchParams;
   const hasError = error === "invalid";
+  const showForbidden = forbidden === "1" || Boolean(user);
   const t = await getDictionary();
 
   return (
@@ -42,6 +46,8 @@ export default async function LoginPage({
             {t.auth.subheading}
           </p>
         </div>
+
+        {showForbidden && <ForbiddenNotice />}
 
         <LoginForm initialError={hasError} />
 

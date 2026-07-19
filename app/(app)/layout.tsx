@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/session";
+import { requireAdmin } from "@/lib/session";
 import { Nav } from "@/components/brand/Nav";
 
 /**
@@ -13,7 +13,7 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await requireUser();
+  const user = await requireAdmin();
 
   return (
     <div className="min-h-full">

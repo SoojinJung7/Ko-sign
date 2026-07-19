@@ -49,3 +49,32 @@ export async function requireUser(): Promise<User> {
   if (!user) redirect("/login");
   return user;
 }
+
+/** True when `email` is on the admin allowlist (`ADMIN_EMAILS`). */
+export function isAdminEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return env.ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+/**
+ * Resolve the current user only if they are an admin; null otherwise (whether
+ * signed out or signed in as a non-admin). Use in API routes to answer with a
+ * 403 rather than a redirect.
+ */
+export async function getAdminUser(): Promise<User | null> {
+  const user = await getCurrentUser();
+  return user && isAdminEmail(user.email) ? user : null;
+}
+
+/**
+ * Require an authenticated *admin* for pages/server-components. Signed-out users
+ * go to /login; signed-in non-admins go to /login?forbidden=1 (the login page
+ * renders an access-denied notice there instead of bouncing them back — which
+ * would loop). Only admins are allowed through.
+ */
+export async function requireAdmin(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (!isAdminEmail(user.email)) redirect("/login?forbidden=1");
+  return user;
+}

@@ -136,9 +136,14 @@ export const ko: typeof en = {
     sentPrefix: "로그인 링크를",
     sentSuffix: "(으)로 보냈어요. 링크를 클릭하면 로그인이 완료됩니다. 링크는 15분 후에 만료돼요.",
     useDifferentEmail: "다른 이메일 사용하기",
+    forbiddenTitle: "이 계정은 접근 권한이 없어요",
+    forbiddenBody:
+      "봉투 만들기와 전송은 관리자만 할 수 있어요. 관리자 이메일로 로그인해 주세요.",
+    switchAccount: "다른 이메일로 로그인",
   },
   // Sender dashboard & envelope management
   sender: {
+    forbidden: "권한이 없습니다.",
     dashboardTitle: "대시보드",
     envelopesHeading: "봉투",
     noEnvelopesYet: "아직 만든 봉투가 없습니다.",
@@ -451,12 +456,39 @@ export const ko: typeof en = {
   chrome: {
     dashboard: "대시보드",
     newEnvelope: "새 봉투",
+    templates: "템플릿",
     logOut: "로그아웃",
     signingOut: "로그아웃 중…",
     primaryNavLabel: "기본 메뉴",
     openNav: "메뉴 열기",
     closeNav: "메뉴 닫기",
     closeDialog: "대화 상자 닫기",
+  },
+  // 재사용 봉투 템플릿
+  templates: {
+    pageTitle: "템플릿",
+    heading: "템플릿",
+    description:
+      "봉투를 템플릿으로 저장해 두면 문서와 서명란 배치를 그대로 재사용할 수 있어요. 나중에 받는 사람만 새로 넣어 보내면 됩니다.",
+    empty: "아직 템플릿이 없어요",
+    emptyDescription:
+      "완료된 봉투를 열고 ‘템플릿으로 저장’을 누르면 만들어져요. 여기에 표시되어 언제든 다시 쓸 수 있습니다.",
+    saveAsTemplate: "템플릿으로 저장",
+    saving: "저장 중…",
+    saved: "템플릿으로 저장했어요.",
+    saveError: "템플릿을 저장하지 못했어요. 다시 시도해 주세요.",
+    useTemplate: "이 템플릿으로 보내기",
+    creating: "준비 중…",
+    useError: "템플릿으로 시작하지 못했어요. 다시 시도해 주세요.",
+    delete: "삭제",
+    deleteConfirmTitle: "이 템플릿을 삭제할까요?",
+    deleteConfirmDescription:
+      "템플릿만 삭제돼요. 이 템플릿으로 이미 보낸 봉투에는 영향이 없습니다. 이 작업은 되돌릴 수 없어요.",
+    deleteError: "템플릿을 삭제하지 못했어요. 다시 시도해 주세요.",
+    fieldSuffixOne: "개 항목",
+    fieldSuffixOther: "개 항목",
+    templateNotFound: "템플릿을 찾을 수 없어요.",
+    envelopeNotFound: "봉투를 찾을 수 없어요.",
   },
   // Transactional email templates
   emails: {

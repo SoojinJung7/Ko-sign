@@ -10,6 +10,7 @@ import {
   retryEnvelopeAdvance,
   voidEnvelope,
 } from "../actions";
+import { saveAsTemplate } from "../../templates/actions";
 
 /* -------------------------------------------------------------------------- */
 /* Void control (with confirmation)                                           */
@@ -117,6 +118,51 @@ export function FinishProcessingBanner({ documentId }: { documentId: string }) {
 /* -------------------------------------------------------------------------- */
 /* Per-recipient resend control                                               */
 /* -------------------------------------------------------------------------- */
+
+/* -------------------------------------------------------------------------- */
+/* Save this envelope as a reusable template                                  */
+/* -------------------------------------------------------------------------- */
+
+export function SaveAsTemplateButton({ documentId }: { documentId: string }) {
+  const { t } = useI18n();
+  const [pending, startTransition] = useTransition();
+  const [status, setStatus] = useState<
+    { kind: "saved" } | { kind: "error"; message: string } | null
+  >(null);
+
+  function save() {
+    setStatus(null);
+    startTransition(async () => {
+      const result = await saveAsTemplate(documentId);
+      setStatus(
+        result.ok
+          ? { kind: "saved" }
+          : { kind: "error", message: result.error },
+      );
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button variant="secondary" loading={pending} onClick={save}>
+        {t.templates.saveAsTemplate}
+      </Button>
+      {status?.kind === "saved" && (
+        <span className="text-xs text-tone-success" role="status">
+          {t.templates.saved}{" "}
+          <a href="/templates" className="font-medium underline">
+            {t.templates.pageTitle}
+          </a>
+        </span>
+      )}
+      {status?.kind === "error" && (
+        <span className="text-xs text-tone-danger" role="alert">
+          {status.message}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function ResendButton({ recipientId }: { recipientId: string }) {
   const { t } = useI18n();

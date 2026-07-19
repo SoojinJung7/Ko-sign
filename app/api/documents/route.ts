@@ -4,7 +4,7 @@ import { logAudit } from "@/lib/audit";
 import { putPdf } from "@/lib/blob";
 import { newId, sha256Hex } from "@/lib/crypto";
 import { getPdfPageCount } from "@/lib/pdf";
-import { requireUser } from "@/lib/session";
+import { getAdminUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -33,7 +33,13 @@ function deriveTitle(explicit: string | null, fileName: string): string {
  * (`originalHash`), count pages, insert the document row, and audit `created`.
  */
 export async function POST(request: Request) {
-  const user = await requireUser();
+  const user = await getAdminUser();
+  if (!user) {
+    return Response.json(
+      { ok: false, error: "You do not have permission to do this." },
+      { status: 403 },
+    );
+  }
 
   let form: FormData;
   try {

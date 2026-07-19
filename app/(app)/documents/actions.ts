@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import { documents, recipients } from "@/db/schema";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, isAdminEmail } from "@/lib/session";
 import { getDictionary, getLocale } from "@/lib/i18n/server";
 import { logAudit } from "@/lib/audit";
 import { sendSigningInvite } from "@/lib/email";
@@ -22,6 +22,7 @@ export async function voidEnvelope(documentId: string): Promise<ActionResult> {
   const t = await getDictionary();
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: t.sender.notSignedIn };
+  if (!isAdminEmail(user.email)) return { ok: false, error: t.sender.forbidden };
 
   const [doc] = await db
     .select()
@@ -66,6 +67,7 @@ export async function retryEnvelopeAdvance(
   const t = await getDictionary();
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: t.sender.notSignedIn };
+  if (!isAdminEmail(user.email)) return { ok: false, error: t.sender.forbidden };
 
   const [doc] = await db
     .select()
@@ -109,6 +111,7 @@ export async function resendToRecipient(
   const t = await getDictionary();
   const user = await getCurrentUser();
   if (!user) return { ok: false, error: t.sender.notSignedIn };
+  if (!isAdminEmail(user.email)) return { ok: false, error: t.sender.forbidden };
 
   const [row] = await db
     .select({ recipient: recipients, doc: documents })

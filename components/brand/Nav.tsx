@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   FilePlus,
+  LayoutTemplate,
   LogOut,
   Menu,
   X,
@@ -18,13 +19,14 @@ import { Logo } from "./Logo";
 
 interface NavItem {
   href: string;
-  labelKey: "dashboard" | "newEnvelope";
+  labelKey: "dashboard" | "newEnvelope" | "templates";
   icon: LucideIcon;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/documents/new", labelKey: "newEnvelope", icon: FilePlus },
+  { href: "/templates", labelKey: "templates", icon: LayoutTemplate },
 ];
 
 export interface NavUser {

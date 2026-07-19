@@ -89,6 +89,12 @@ export const documents = pgTable("documents", {
   title: text("title").notNull(),
   message: text("message"),
   status: docStatus("status").notNull().default("draft"),
+  /**
+   * A reusable blueprint rather than a live envelope. Templates hold the PDF and
+   * the field/recipient layout but carry no recipient PII; they are excluded
+   * from the dashboard and are cloned into a fresh draft when used.
+   */
+  isTemplate: boolean("is_template").notNull().default(false),
   requireIdentityCheck: boolean("require_identity_check")
     .notNull()
     .default(false),

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import { documents, recipients } from "@/db/schema";
@@ -62,7 +62,9 @@ export default async function DashboardPage() {
   const docs = await db
     .select()
     .from(documents)
-    .where(eq(documents.userId, user.id))
+    .where(
+      and(eq(documents.userId, user.id), eq(documents.isTemplate, false)),
+    )
     .orderBy(desc(documents.createdAt));
 
   // Recipient counts in a single grouped query.

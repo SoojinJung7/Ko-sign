@@ -24,6 +24,16 @@ export const env = {
   RESEND_API_KEY: optional("RESEND_API_KEY"),
   EMAIL_FROM: optional("EMAIL_FROM") ?? "Ko-sign <onboarding@resend.dev>",
 
+  /**
+   * Comma-separated allowlist of admin emails. Only these accounts may enter the
+   * sender area (create / prepare / send envelopes and manage templates). Stored
+   * lowercased so comparisons are case-insensitive. Empty ⇒ nobody is admin.
+   */
+  ADMIN_EMAILS: (optional("ADMIN_EMAILS") ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean),
+
   TWILIO_ACCOUNT_SID: optional("TWILIO_ACCOUNT_SID"),
   TWILIO_AUTH_TOKEN: optional("TWILIO_AUTH_TOKEN"),
   TWILIO_FROM: optional("TWILIO_FROM"),

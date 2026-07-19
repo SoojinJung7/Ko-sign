@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { documents } from "@/db/schema";
 import { sendEnvelope } from "@/lib/envelope";
-import { requireUser } from "@/lib/session";
+import { getAdminUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -16,7 +16,13 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await requireUser();
+  const user = await getAdminUser();
+  if (!user) {
+    return Response.json(
+      { ok: false, error: "You do not have permission to do this." },
+      { status: 403 },
+    );
+  }
   const { id } = await params;
 
   const [doc] = await db

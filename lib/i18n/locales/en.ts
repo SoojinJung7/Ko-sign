@@ -134,9 +134,14 @@ export const en = {
     sentPrefix: "We sent a sign-in link to",
     sentSuffix: ". Click it to finish signing in — it expires in 15 minutes.",
     useDifferentEmail: "Use a different email",
+    forbiddenTitle: "This account doesn't have access",
+    forbiddenBody:
+      "Only an administrator can create and send envelopes. Sign in with an admin email to continue.",
+    switchAccount: "Sign in with a different email",
   },
   // Sender dashboard & envelope management
   sender: {
+    forbidden: "You do not have permission to do this.",
     dashboardTitle: "Dashboard",
     envelopesHeading: "Envelopes",
     noEnvelopesYet: "You haven't created any envelopes yet.",
@@ -449,12 +454,39 @@ export const en = {
   chrome: {
     dashboard: "Dashboard",
     newEnvelope: "New envelope",
+    templates: "Templates",
     logOut: "Log out",
     signingOut: "Signing out…",
     primaryNavLabel: "Primary",
     openNav: "Open navigation menu",
     closeNav: "Close navigation menu",
     closeDialog: "Close dialog",
+  },
+  // Reusable envelope templates
+  templates: {
+    pageTitle: "Templates",
+    heading: "Templates",
+    description:
+      "Save an envelope as a template to reuse its document and field layout. Send it later to new recipients without rebuilding it.",
+    empty: "No templates yet",
+    emptyDescription:
+      "Open a finished envelope and choose “Save as template” to create one. It will appear here, ready to reuse.",
+    saveAsTemplate: "Save as template",
+    saving: "Saving…",
+    saved: "Saved as a template.",
+    saveError: "Couldn't save this template. Please try again.",
+    useTemplate: "Send from this template",
+    creating: "Preparing…",
+    useError: "Couldn't start from this template. Please try again.",
+    delete: "Delete",
+    deleteConfirmTitle: "Delete this template?",
+    deleteConfirmDescription:
+      "This removes the template only. Envelopes you already sent from it are unaffected. This can't be undone.",
+    deleteError: "Couldn't delete this template. Please try again.",
+    fieldSuffixOne: " field",
+    fieldSuffixOther: " fields",
+    templateNotFound: "Template not found.",
+    envelopeNotFound: "Envelope not found.",
   },
   // Transactional email templates
   emails: {

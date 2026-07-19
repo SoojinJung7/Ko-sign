@@ -14,6 +14,7 @@ import { AuditTrail } from "@/components/audit/AuditTrail";
 import {
   FinishProcessingBanner,
   ResendButton,
+  SaveAsTemplateButton,
   VoidEnvelopeButton,
 } from "./DocumentActions";
 
@@ -160,6 +161,9 @@ export default async function DocumentDetailPage({
             </a>
           )}
           {doc.status === "sent" && <VoidEnvelopeButton documentId={doc.id} />}
+          {!doc.isTemplate && (
+            <SaveAsTemplateButton documentId={doc.id} />
+          )}
         </div>
       </header>
 

@@ -12,7 +12,7 @@ import {
   type NewRecipient,
 } from "@/db/schema";
 import { newId, randomToken } from "@/lib/crypto";
-import { requireUser } from "@/lib/session";
+import { getAdminUser } from "@/lib/session";
 import { en } from "@/lib/i18n/locales/en";
 import {
   formatGroupIssue,
@@ -91,7 +91,13 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const user = await requireUser();
+  const user = await getAdminUser();
+  if (!user) {
+    return Response.json(
+      { ok: false, error: "You do not have permission to do this." },
+      { status: 403 },
+    );
+  }
   const { id } = await params;
 
   const [doc] = await db
