@@ -309,6 +309,14 @@ export const en = {
   // Signer experience
   signer: {
     metaTitle: "Review & sign",
+    cantSeeDocumentTitle: "Document not showing?",
+    cantSeeDocumentBody:
+      "In-app viewers (Gmail, KakaoTalk, Instagram…) sometimes can't display the PDF. Open this in your browser instead.",
+    openInBrowser: "Open in browser",
+    openInBrowserIosHint:
+      "On iPhone: tap the ⋯ or share icon at the top, then “Open in Safari”. Or copy the link and paste it into Safari.",
+    copyLink: "Copy link",
+    linkCopied: "Link copied",
     invalidLinkTitle: "This signing link isn't valid",
     invalidLinkBody: "The link may be incomplete or expired. Please use the most recent link from your email, or ask the sender to resend it.",
     voidedTitle: "This document was voided",

@@ -8,6 +8,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { formatGroupRule } from "@/lib/types";
 import { cn } from "@/lib/ui";
 import { DocumentViewer } from "./DocumentViewer";
+import { OpenInBrowserNotice } from "./OpenInBrowserNotice";
 import { SignaturePad } from "./SignaturePad";
 import { OtpGate } from "./OtpGate";
 import {
@@ -303,6 +304,8 @@ export function SignerApp({
       }
     >
       <div className="mx-auto w-full max-w-3xl px-4 pb-40 pt-6 sm:px-6">
+        <OpenInBrowserNotice />
+
         {doc.message && (
           <Alert
             variant="info"

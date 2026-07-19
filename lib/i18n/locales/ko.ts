@@ -311,6 +311,14 @@ export const ko: typeof en = {
   // Signer experience
   signer: {
     metaTitle: "검토 및 서명",
+    cantSeeDocumentTitle: "문서가 안 보이나요?",
+    cantSeeDocumentBody:
+      "지메일·카톡·인스타 같은 앱 안의 화면에서는 PDF가 안 보일 수 있어요. 브라우저에서 열면 정상적으로 보입니다.",
+    openInBrowser: "브라우저에서 열기",
+    openInBrowserIosHint:
+      "아이폰은 화면 위쪽 ⋯ 또는 공유 아이콘을 눌러 ‘Safari로 열기’를 선택하세요. 또는 링크를 복사해 Safari 주소창에 붙여넣으세요.",
+    copyLink: "링크 복사",
+    linkCopied: "링크를 복사했어요",
     invalidLinkTitle: "유효하지 않은 서명 링크입니다",
     invalidLinkBody: "링크가 불완전하거나 만료되었을 수 있습니다. 이메일에서 가장 최근 링크를 사용하시거나 보낸 사람에게 다시 보내달라고 요청하세요.",
     voidedTitle: "이 문서는 무효 처리되었습니다",
