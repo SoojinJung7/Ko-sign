@@ -24,10 +24,10 @@ export interface SignerGroup extends GroupRule {
 
 /** The value a signer has entered for one field. */
 export interface FieldValue {
-  kind?: "drawn" | "typed";
+  kind?: "drawn" | "typed" | "stamp";
   /** Typed signature text, or date / text / checkbox value. */
   value?: string;
-  /** Drawn-signature PNG data URL. */
+  /** Drawn-signature or uploaded-stamp PNG data URL. */
   imageData?: string;
 }
 

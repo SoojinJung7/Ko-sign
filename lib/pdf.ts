@@ -405,7 +405,7 @@ export async function finalizeDocument(
     switch (field.type) {
       case "signature":
       case "initials": {
-        if (sig?.kind === "drawn" && sig.imageData) {
+        if ((sig?.kind === "drawn" || sig?.kind === "stamp") && sig.imageData) {
           try {
             const { mime, bytes } = decodeDataUrl(sig.imageData);
             const image = mime.includes("jpeg") || mime.includes("jpg")

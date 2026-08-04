@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui";
 import { useI18n } from "@/lib/i18n/provider";
@@ -32,24 +32,24 @@ function isInAppBrowser(ua: string): boolean {
   return named || androidWebView || iosInApp;
 }
 
+const uaSubscribe = () => () => {};
+
 export function OpenInBrowserNotice() {
   const { t } = useI18n();
-  // Detection and window access are client-only; render nothing until mounted
-  // so server and first client paint agree.
-  const [mounted, setMounted] = useState(false);
-  const [inApp, setInApp] = useState(false);
-  const [isIos, setIsIos] = useState(false);
+  // The user agent is client-only; the server snapshot is "" so the server and
+  // first client paint agree on rendering nothing.
+  const ua = useSyncExternalStore(
+    uaSubscribe,
+    () => navigator.userAgent || "unknown",
+    () => "",
+  );
+  const mounted = ua !== "";
+  const inApp = isInAppBrowser(ua);
+  const isIos = /iPhone|iPad|iPod/i.test(ua);
   const [dismissed, setDismissed] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showUrl, setShowUrl] = useState(false);
   const urlRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const ua = navigator.userAgent || "";
-    setInApp(isInAppBrowser(ua));
-    setIsIos(/iPhone|iPad|iPod/i.test(ua));
-    setMounted(true);
-  }, []);
 
   if (!mounted || dismissed) return null;
 

@@ -28,7 +28,7 @@ export const runtime = "nodejs";
 
 const fieldSchema = z.object({
   fieldId: z.string().min(1),
-  kind: z.enum(["drawn", "typed"]).optional(),
+  kind: z.enum(["drawn", "typed", "stamp"]).optional(),
   value: z.string().optional(),
   imageData: z.string().optional(),
 });

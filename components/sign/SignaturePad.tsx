@@ -13,7 +13,7 @@ import { useI18n } from "@/lib/i18n/provider";
 import { cn } from "@/lib/ui";
 import type { FieldValue } from "./types";
 
-type Mode = "draw" | "type";
+type Mode = "draw" | "type" | "stamp";
 
 export interface SignaturePadProps {
   open: boolean;
@@ -27,6 +27,43 @@ export interface SignaturePadProps {
 
 const INK = "#1c1e2b";
 const CANVAS_HEIGHT = 200;
+
+/** Longest edge of a processed stamp image, keeping data URLs small. */
+const MAX_STAMP_DIM = 600;
+
+/**
+ * Downscale an uploaded stamp image and optionally knock out its paper
+ * background: pixels fade to transparent as they approach white, so a red or
+ * black seal photographed on white paper overlays the document cleanly.
+ */
+function processStampImage(img: HTMLImageElement, removeWhite: boolean): string {
+  const scale = Math.min(1, MAX_STAMP_DIM / Math.max(img.width, img.height));
+  const w = Math.max(1, Math.round(img.width * scale));
+  const h = Math.max(1, Math.round(img.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return img.src;
+  ctx.drawImage(img, 0, 0, w, h);
+  if (removeWhite) {
+    const data = ctx.getImageData(0, 0, w, h);
+    const px = data.data;
+    for (let i = 0; i < px.length; i += 4) {
+      // Whiteness = the dimmest channel: high for paper, low for red/black ink.
+      const whiteness = Math.min(px[i], px[i + 1], px[i + 2]);
+      const alpha =
+        whiteness >= 235
+          ? 0
+          : whiteness <= 150
+            ? 255
+            : Math.round((255 * (235 - whiteness)) / 85);
+      px[i + 3] = Math.min(px[i + 3], alpha);
+    }
+    ctx.putImageData(data, 0, 0);
+  }
+  return canvas.toDataURL("image/png");
+}
 
 /**
  * A signing pad: draw with a pointer (mouse / finger / stylus) producing a
@@ -47,10 +84,30 @@ export function SignaturePad({
   const [mode, setMode] = useState<Mode>("draw");
   const [typed, setTyped] = useState(suggested);
   const [hasDrawing, setHasDrawing] = useState(false);
+  const [stampImg, setStampImg] = useState<HTMLImageElement | null>(null);
+  const [stampRemoveBg, setStampRemoveBg] = useState(true);
+  const [stampError, setStampError] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
+
+  const stampPreview =
+    stampImg !== null ? processStampImage(stampImg, stampRemoveBg) : null;
+
+  const onStampFile = (file: File | undefined) => {
+    if (!file) return;
+    setStampError(false);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => setStampImg(img);
+      img.onerror = () => setStampError(true);
+      img.src = String(reader.result);
+    };
+    reader.onerror = () => setStampError(true);
+    reader.readAsDataURL(file);
+  };
 
   // Size the canvas backing store to its box (crisp on HiDPI) when shown.
   const setupCanvas = useCallback(() => {
@@ -120,13 +177,21 @@ export function SignaturePad({
     setHasDrawing(false);
   };
 
-  const canAdopt = mode === "draw" ? hasDrawing : typed.trim().length > 0;
+  const canAdopt =
+    mode === "draw"
+      ? hasDrawing
+      : mode === "stamp"
+        ? stampPreview !== null
+        : typed.trim().length > 0;
 
   const adopt = () => {
     if (mode === "draw") {
       const canvas = canvasRef.current;
       if (!canvas || !hasDrawing) return;
       onAdopt({ kind: "drawn", imageData: canvas.toDataURL("image/png") });
+    } else if (mode === "stamp") {
+      if (!stampPreview) return;
+      onAdopt({ kind: "stamp", imageData: stampPreview });
     } else {
       const value = typed.trim();
       if (!value) return;
@@ -164,6 +229,7 @@ export function SignaturePad({
             [
               ["draw", t.signer.tabDraw],
               ["type", t.signer.tabType],
+              ["stamp", t.signer.tabStamp],
             ] as const
           ).map(([value, text]) => {
             const active = mode === value;
@@ -220,6 +286,70 @@ export function SignaturePad({
                 {t.signer.clear}
               </Button>
             </div>
+          </div>
+        ) : mode === "stamp" ? (
+          <div className="space-y-3">
+            {stampPreview ? (
+              <div
+                className="flex min-h-40 items-center justify-center rounded-xl border border-border-strong p-4"
+                style={{
+                  // Checkerboard so the knocked-out background reads as transparent.
+                  backgroundImage:
+                    "linear-gradient(45deg,#eef0f4 25%,transparent 25%,transparent 75%,#eef0f4 75%),linear-gradient(45deg,#eef0f4 25%,#ffffff 25%,#ffffff 75%,#eef0f4 75%)",
+                  backgroundSize: "16px 16px",
+                  backgroundPosition: "0 0,8px 8px",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={stampPreview}
+                  alt=""
+                  className="max-h-36 max-w-full object-contain"
+                />
+              </div>
+            ) : (
+              <label className="flex min-h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border-strong bg-surface-2/40 px-4 text-center hover:bg-surface-2/70">
+                <span className="text-sm font-medium text-foreground">
+                  {t.signer.stampChoose}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {t.signer.stampHint}
+                </span>
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  onChange={(e) => onStampFile(e.target.files?.[0])}
+                />
+              </label>
+            )}
+            {stampError && (
+              <p className="text-xs text-tone-danger" role="alert">
+                {t.signer.stampLoadError}
+              </p>
+            )}
+            {stampPreview && (
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={stampRemoveBg}
+                    onChange={(e) => setStampRemoveBg(e.target.checked)}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  {t.signer.stampRemoveBg}
+                </label>
+                <label className="cursor-pointer text-sm font-medium text-primary hover:underline">
+                  {t.signer.stampReplace}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="sr-only"
+                    onChange={(e) => onStampFile(e.target.files?.[0])}
+                  />
+                </label>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-2">

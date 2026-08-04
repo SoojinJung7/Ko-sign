@@ -40,7 +40,7 @@ export const fieldType = pgEnum("field_type", [
   "checkbox",
 ]);
 
-export const sigKind = pgEnum("sig_kind", ["drawn", "typed"]);
+export const sigKind = pgEnum("sig_kind", ["drawn", "typed", "stamp"]);
 
 export const auditType = pgEnum("audit_type", [
   "created",
