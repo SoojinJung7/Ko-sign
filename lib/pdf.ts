@@ -16,6 +16,7 @@ import {
 import { sha256Hex } from "@/lib/crypto";
 import { getPdfBytes } from "@/lib/blob";
 import { FontBook } from "@/lib/fonts";
+import { DISPLAY_TIME_ZONE } from "@/lib/datetime";
 
 export const runtime = "nodejs";
 
@@ -210,7 +211,7 @@ function fmtDate(value: Date | null | undefined): string {
   return new Intl.DateTimeFormat("en-US", {
     dateStyle: "medium",
     timeStyle: "long",
-    timeZone: "UTC",
+    timeZone: DISPLAY_TIME_ZONE,
   }).format(value);
 }
 

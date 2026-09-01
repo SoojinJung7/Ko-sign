@@ -22,6 +22,8 @@ export const env = {
   BLOB_READ_WRITE_TOKEN: optional("BLOB_READ_WRITE_TOKEN"),
 
   RESEND_API_KEY: optional("RESEND_API_KEY"),
+  /** Comma-separated allowlist gating the email diagnostics route. */
+  ADMIN_EMAILS: optional("ADMIN_EMAILS") ?? "",
   EMAIL_FROM: optional("EMAIL_FROM") ?? "Ko-sign <onboarding@resend.dev>",
 
   /**
@@ -40,6 +42,17 @@ export const env = {
 } as const;
 
 export const isEmailConfigured: boolean = Boolean(env.RESEND_API_KEY);
+
+/**
+ * Deny by default: with no allowlist configured, nobody is an admin. Sending
+ * infrastructure details to a signed-in stranger is worse than locking us out.
+ */
+export function isAdminEmail(email: string): boolean {
+  const allow = env.ADMIN_EMAILS.split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  return allow.length > 0 && allow.includes(email.trim().toLowerCase());
+}
 
 export const isSmsConfigured: boolean = Boolean(
   env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_FROM,

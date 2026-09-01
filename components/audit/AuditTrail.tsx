@@ -1,5 +1,4 @@
-import { format } from "date-fns";
-
+import { formatAuditTimestamp } from "@/lib/datetime";
 import { cn } from "@/lib/ui";
 import { getDictionary } from "@/lib/i18n/server";
 import {
@@ -67,7 +66,7 @@ function formatTimestamp(value: Date | string): {
     return { full: raw, iso: raw };
   }
   return {
-    full: format(date, "MMM d, yyyy 'at' h:mm a"),
+    full: formatAuditTimestamp(date),
     iso: date.toISOString(),
   };
 }

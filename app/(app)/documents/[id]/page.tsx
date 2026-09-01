@@ -18,15 +18,9 @@ import {
   VoidEnvelopeButton,
 } from "./DocumentActions";
 
-export const runtime = "nodejs";
+import { formatDateTime } from "@/lib/datetime";
 
-const dateTimeFmt = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-});
+export const runtime = "nodejs";
 
 const linkPrimary =
   "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -121,12 +115,12 @@ export default async function DocumentDetailPage({
           </div>
           <p className="mt-1.5 text-sm text-muted-foreground">
             {doc.originalFileName} · {t.sender.createdLabel}{" "}
-            {dateTimeFmt.format(doc.createdAt)}
+            {formatDateTime(doc.createdAt)}
             {doc.sentAt
-              ? ` · ${t.sender.sentAtLabel} ${dateTimeFmt.format(doc.sentAt)}`
+              ? ` · ${t.sender.sentAtLabel} ${formatDateTime(doc.sentAt)}`
               : ""}
             {doc.completedAt
-              ? ` · ${t.sender.completedAtLabel} ${dateTimeFmt.format(doc.completedAt)}`
+              ? ` · ${t.sender.completedAtLabel} ${formatDateTime(doc.completedAt)}`
               : ""}
           </p>
         </div>

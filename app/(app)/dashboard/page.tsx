@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { documents, recipients } from "@/db/schema";
 import { requireUser } from "@/lib/session";
 import { getDictionary } from "@/lib/i18n/server";
+import { formatDate } from "@/lib/datetime";
 import { cn } from "@/lib/ui";
 import {
   DOC_STATUS_TONE,
@@ -21,12 +22,6 @@ export async function generateMetadata(): Promise<Metadata> {
   const t = await getDictionary();
   return { title: t.sender.dashboardTitle };
 }
-
-const dateFmt = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-});
 
 const toneDot: Record<BadgeTone, string> = {
   neutral: "bg-tone-neutral",
@@ -199,7 +194,7 @@ export default async function DashboardPage() {
                         </span>
                         <span aria-hidden="true">·</span>
                         <span>
-                          {t.sender.createdLabel} {dateFmt.format(doc.createdAt)}
+                          {t.sender.createdLabel} {formatDate(doc.createdAt)}
                         </span>
                       </p>
                     </div>
