@@ -1,5 +1,5 @@
-import { env, isAdminEmail, isEmailConfigured } from "@/lib/env";
-import { getCurrentUser } from "@/lib/session";
+import { env, isEmailConfigured } from "@/lib/env";
+import { getAdminUser } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -27,8 +27,8 @@ function senderDomain(from: string): string | null {
 }
 
 export async function GET(): Promise<Response> {
-  const user = await getCurrentUser();
-  if (!user || !isAdminEmail(user.email)) {
+  const admin = await getAdminUser();
+  if (!admin) {
     // Same response for signed-out and non-admin: don't confirm the route exists.
     return Response.json({ error: "Not found." }, { status: 404 });
   }
