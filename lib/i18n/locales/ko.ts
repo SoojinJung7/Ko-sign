@@ -182,6 +182,11 @@ export const ko: typeof en = {
     stalledRetryFailed: "여전히 이 봉투를 완료하지 못했습니다.",
     resendInvite: "초대 다시 보내기",
     inviteSent: "초대를 보냈습니다",
+    copySignLink: "서명 링크 복사",
+    signLinkCopied: "링크를 복사했습니다",
+    signLinkCopyFailed: "복사하지 못했습니다 — 링크를 직접 선택해 복사해 주세요.",
+    signLinkHint:
+      "이 링크를 가진 사람은 누구나 해당 수신자로 서명할 수 있습니다. 본인에게만 전달하세요.",
     notSignedIn: "로그인되어 있지 않습니다.",
     envelopeNotFound: "봉투를 찾을 수 없습니다.",
     cannotVoidPrefix: "",

@@ -180,6 +180,11 @@ export const en = {
     stalledRetryFailed: "Still couldn't finish this envelope.",
     resendInvite: "Resend invite",
     inviteSent: "Invite sent",
+    copySignLink: "Copy signing link",
+    signLinkCopied: "Link copied",
+    signLinkCopyFailed: "Could not copy — select the link and copy it manually.",
+    signLinkHint:
+      "Anyone with this link can sign as this recipient. Share it only with them.",
     notSignedIn: "You are not signed in.",
     envelopeNotFound: "Envelope not found.",
     cannotVoidPrefix: "A ",

@@ -164,6 +164,75 @@ export function SaveAsTemplateButton({ documentId }: { documentId: string }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* Copy signing link                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Escape hatch for when invite email does not reach the signer — a misconfigured
+ * sender domain, an aggressive spam filter, a typo'd address the signer can
+ * still be reached at another way. The sender hands over the link directly.
+ *
+ * The link carries the recipient's signing token, so it grants the ability to
+ * sign as them; the hint says so, and the button only renders for recipients
+ * who have not signed or declined.
+ */
+export function CopySignLinkButton({ url }: { url: string }) {
+  const { t } = useI18n();
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+
+  async function copy() {
+    try {
+      // Clipboard API needs a secure context; fall back for http:// dev hosts.
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const field = document.createElement("textarea");
+        field.value = url;
+        field.setAttribute("readonly", "");
+        field.style.position = "fixed";
+        field.style.opacity = "0";
+        document.body.appendChild(field);
+        field.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(field);
+        if (!ok) throw new Error("execCommand copy rejected");
+      }
+      setState("copied");
+      window.setTimeout(() => setState("idle"), 3000);
+    } catch {
+      setState("failed");
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button size="sm" variant="secondary" onClick={copy}>
+        {t.sender.copySignLink}
+      </Button>
+      {state === "copied" && (
+        <span className="text-xs text-tone-success" role="status">
+          {t.sender.signLinkCopied}
+        </span>
+      )}
+      {state === "failed" && (
+        <>
+          <span className="text-xs text-tone-danger" role="alert">
+            {t.sender.signLinkCopyFailed}
+          </span>
+          {/* Manual fallback: the link has to be reachable even when copying fails. */}
+          <input
+            readOnly
+            value={url}
+            onFocus={(event) => event.currentTarget.select()}
+            className="w-64 rounded border border-border bg-surface-2 px-2 py-1 text-xs text-muted-foreground"
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
 export function ResendButton({ recipientId }: { recipientId: string }) {
   const { t } = useI18n();
   const [pending, startTransition] = useTransition();

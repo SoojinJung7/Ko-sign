@@ -8,17 +8,18 @@ import { documents, recipients } from "@/db/schema";
 import { requireUser } from "@/lib/session";
 import { getDictionary } from "@/lib/i18n/server";
 import { getAuditTrail } from "@/lib/audit";
+import { formatDateTime } from "@/lib/datetime";
+import { recipientSignUrl } from "@/lib/envelope";
 import { Card, CardContent, CardHeader, CardTitle, StatusBadge } from "@/components/ui";
 import { AuditTrail } from "@/components/audit/AuditTrail";
 
 import {
+  CopySignLinkButton,
   FinishProcessingBanner,
   ResendButton,
   SaveAsTemplateButton,
   VoidEnvelopeButton,
 } from "./DocumentActions";
-
-import { formatDateTime } from "@/lib/datetime";
 
 export const runtime = "nodejs";
 
@@ -230,12 +231,22 @@ export default async function DocumentDetailPage({
                         label={t.status.recipient[r.status]}
                         aria-label={`${t.sender.statusLabel}: ${t.status.recipient[r.status]}`}
                       />
-                      {eligibleToResend && <ResendButton recipientId={r.id} />}
+                      {eligibleToResend && (
+                        <>
+                          <CopySignLinkButton url={recipientSignUrl(r.token)} />
+                          <ResendButton recipientId={r.id} />
+                        </>
+                      )}
                     </div>
                   </li>
                 );
               })}
             </ul>
+          )}
+          {canResend && (
+            <p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
+              {t.sender.signLinkHint}
+            </p>
           )}
         </CardContent>
       </Card>
